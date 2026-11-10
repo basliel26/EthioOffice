@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: ethiooffice_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-ethiooffice}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # EthioOffice FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ethiooffice_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-ethiooffice}
+      STORAGE_ROOT: /app/storage_data
+      EURO_OFFICE_URL: http://eurooffice:80
+      EURO_OFFICE_JWT_SECRET: ${EURO_OFFICE_JWT_SECRET:-euro-office-secret-change-in-production}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - backend_storage:/app/storage_data
+
+  # EthioOffice React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ethiooffice_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  # Euro-Office / ONLYOFFICE Document Server (Simultaneous live editing)
+  eurooffice:
+    image: onlyoffice/documentserver:latest
+    container_name: ethiooffice_eurooffice
+    restart: unless-stopped
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${EURO_OFFICE_JWT_SECRET:-euro-office-secret-change-in-production}
+      JWT_HEADER: "Authorization"
+    ports:
+      - "8080:80"
+    volumes:
+      - eurooffice_data:/var/www/onlyoffice/Data
+      - eurooffice_log:/var/log/onlyoffice
+
+volumes:
+  postgres_data:
+  backend_storage:
+  eurooffice_data:
+  eurooffice_log:

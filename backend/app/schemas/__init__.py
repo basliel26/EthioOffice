@@ -1,0 +1,3 @@
+"""
+EthioOffice Pydantic Schemas Package
+"""
