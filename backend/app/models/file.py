@@ -16,6 +16,8 @@ class FileItem(Base):
     __tablename__ = "file_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    
     name = Column(String(255), nullable=False, index=True)
     is_folder = Column(Boolean, default=False, nullable=False, index=True)
     parent_id = Column(UUID(as_uuid=True), ForeignKey("file_items.id", ondelete="CASCADE"), nullable=True, index=True)
@@ -36,6 +38,7 @@ class FileItem(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
+    organization = relationship("Organization", back_populates="file_items")
     owner = relationship("User", back_populates="owned_files", foreign_keys=[owner_id])
     department = relationship("Department", back_populates="company_drive_roots")
     parent = relationship("FileItem", remote_side=[id], back_populates="children")
@@ -45,6 +48,7 @@ class FileItem(Base):
     lock = relationship("FileLock", back_populates="file_item", uselist=False, cascade="all, delete-orphan")
     eurooffice_sessions = relationship("EuroOfficeSession", back_populates="file_item", cascade="all, delete-orphan")
     search_index = relationship("FileSearchIndex", back_populates="file_item", uselist=False, cascade="all, delete-orphan")
+    tags = relationship("FileTag", back_populates="file_item", cascade="all, delete-orphan")
 
 
 class FileVersion(Base):

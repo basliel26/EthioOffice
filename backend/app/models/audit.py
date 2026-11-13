@@ -17,15 +17,19 @@ class AuditAction(str, enum.Enum):
     LOCK = "LOCK"
     UNLOCK = "UNLOCK"
     SHARE = "SHARE"
+    LETTER_REGISTER = "LETTER_REGISTER"
+    LETTER_DISPATCH = "LETTER_DISPATCH"
 
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    
     action = Column(Enum(AuditAction, name="audit_action_enum"), nullable=False, index=True)
-    target_type = Column(String(30), nullable=False)  # 'FILE', 'FOLDER', 'SHARE', 'USER'
+    target_type = Column(String(30), nullable=False)  # 'FILE', 'FOLDER', 'SHARE', 'USER', 'LETTER'
     target_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     target_name = Column(String(255), nullable=False)
     details = Column(JSONB, nullable=True)
@@ -34,3 +38,4 @@ class AuditLog(Base):
 
     # Relationships
     user = relationship("User")
+    organization = relationship("Organization")

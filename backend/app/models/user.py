@@ -1,22 +1,25 @@
 import uuid
 from datetime import datetime, timezone
 import enum
-from sqlalchemy import Column, String, Boolean, BigInteger, DateTime, Enum
+from sqlalchemy import Column, String, Boolean, BigInteger, DateTime, Enum, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
 class UserRole(str, enum.Enum):
-    ADMIN = "ADMIN"
-    MANAGER = "MANAGER"
-    STAFF = "STAFF"
+    SUPER_ADMIN = "SUPER_ADMIN"  # Platform-level administrator
+    ADMIN = "ADMIN"              # Organization administrator
+    MANAGER = "MANAGER"          # Department manager
+    STAFF = "STAFF"              # Standard employee
 
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    
     email = Column(String(255), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=False)
@@ -30,6 +33,7 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
+    organization = relationship("Organization", back_populates="users")
     departments = relationship("UserDepartment", back_populates="user", cascade="all, delete-orphan")
     owned_files = relationship("FileItem", back_populates="owner", foreign_keys="FileItem.owner_id")
     file_versions = relationship("FileVersion", back_populates="created_by")
