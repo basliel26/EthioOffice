@@ -78,3 +78,47 @@ class ShareCreateRequest(BaseModel):
 class LockRequest(BaseModel):
     reason: Optional[str] = "Editing document"
     duration_minutes: int = 120  # Default 2 hours
+
+
+class BatchMoveRequest(BaseModel):
+    item_ids: List[uuid.UUID] = Field(..., min_length=1)
+    new_parent_id: Optional[uuid.UUID] = None
+
+
+class BatchMoveResponse(BaseModel):
+    moved_count: int
+    failed_count: int
+    details: List[dict]
+
+
+class BatchDeleteRequest(BaseModel):
+    item_ids: List[uuid.UUID] = Field(..., min_length=1)
+    permanent: bool = False
+
+
+class BatchDeleteResponse(BaseModel):
+    affected_count: int
+    freed_bytes: int
+
+
+class LargestFileSummary(BaseModel):
+    id: uuid.UUID
+    name: str
+    size_bytes: int
+    drive_type: str
+    owner_name: Optional[str] = None
+    created_at: datetime
+    ec_created_at: Optional[str] = None
+
+
+class StorageAnalyticsResponse(BaseModel):
+    total_used_bytes: int
+    storage_limit_bytes: int
+    percentage_used: float
+    personal_drive_bytes: int
+    company_drive_bytes: int
+    trash_bytes: int
+    total_files: int
+    total_folders: int
+    top_largest_files: List[LargestFileSummary]
+

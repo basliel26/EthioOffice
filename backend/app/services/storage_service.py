@@ -12,9 +12,10 @@ from datetime import datetime, timezone
 from typing import Optional, List, Tuple, BinaryIO, Set
 from collections import deque
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 
 from app.core.config import settings
+from app.models.organization import Organization
 from app.models.file import FileItem, FileVersion, DriveType
 from app.models.user import User, UserRole
 from app.models.department import Department
@@ -26,6 +27,10 @@ from app.schemas.file import (
     FileItemResponse,
     BreadcrumbItem,
     FileLockInfo,
+    BatchMoveResponse,
+    BatchDeleteResponse,
+    StorageAnalyticsResponse,
+    LargestFileSummary,
 )
 
 
@@ -58,6 +63,45 @@ class DriveAccessDeniedError(StorageDomainError):
 
 class FilePayloadMissingError(StorageDomainError):
     pass
+
+
+class SecurityViolationError(StorageDomainError):
+    """Raised when an uploaded file violates enterprise malware or path traversal policies."""
+    pass
+
+
+# =====================================================================
+# Enterprise File Security & Sanitization
+# =====================================================================
+
+DANGEROUS_EXTENSIONS = {
+    ".exe", ".bat", ".cmd", ".sh", ".bash", ".vbs", ".ps1", ".scr",
+    ".dll", ".msi", ".com", ".pif", ".hta", ".cpl", ".wsf", ".vbe", ".reg"
+}
+
+
+def validate_file_security(filename: str) -> str:
+    """
+    Validates uploaded file against dangerous malware extensions and path traversal attacks.
+    Returns cleaned filename.
+    """
+    if not filename or not filename.strip():
+        raise SecurityViolationError("የፋይል ስም ባዶ መሆን አይችልም (Filename cannot be empty)")
+
+    clean_name = os.path.basename(filename.strip())
+    if not clean_name:
+        raise SecurityViolationError("የተሳሳተ የፋይል ስም (Invalid filename)")
+
+    # Check path traversal
+    if ".." in filename or "/" in filename or "\\" in filename or "\0" in filename:
+        raise SecurityViolationError("የተከለከለ የፋይል መንገድ ቁምፊ (Prohibited path traversal sequence in filename)")
+
+    ext = os.path.splitext(clean_name)[1].lower()
+    if ext in DANGEROUS_EXTENSIONS:
+        raise SecurityViolationError(
+            f"ይህ የፋይል አይነት ({ext}) ለደህንነት ሲባል የተከለከለ ነው (Executable and script file extensions '{ext}' are strictly prohibited for enterprise security)"
+        )
+    return clean_name
 
 
 # =====================================================================
@@ -288,6 +332,8 @@ class StorageService:
         CapabilityService.verify_organization_write_access(db, org_id)
 
         clean_name = name.strip()
+        if not clean_name or ".." in name or "/" in name or "\\" in name or "\0" in name:
+            raise SecurityViolationError("የተከለከለ የአቃፊ ስም (Prohibited path characters in folder name)")
         drive_enum = DriveType.COMPANY if drive_type.upper() == "COMPANY" else DriveType.PERSONAL
 
         # Validate parent folder if specified
@@ -357,7 +403,8 @@ class StorageService:
         # Module 3 Enterprise Write Lockdown check
         CapabilityService.verify_organization_write_access(db, org_id)
 
-        clean_filename = filename.strip()
+        # Enterprise INSA Malware & Traversal Security check
+        clean_filename = validate_file_security(filename)
         drive_enum = DriveType.COMPANY if drive_type.upper() == "COMPANY" else DriveType.PERSONAL
 
         if parent_id:
@@ -540,8 +587,14 @@ class StorageService:
         """Renames an item with duplicate checking within the parent."""
         CapabilityService.verify_organization_write_access(db, org_id)
 
-        clean_name = new_name.strip()
         item = cls.get_item(db, org_id, item_id, actor)
+
+        if item.is_folder:
+            clean_name = new_name.strip()
+            if not clean_name or ".." in new_name or "/" in new_name or "\\" in new_name or "\0" in new_name:
+                raise SecurityViolationError("የተከለከለ የአቃፊ ስም (Prohibited path characters in folder name)")
+        else:
+            clean_name = validate_file_security(new_name)
 
         # Duplicate check under same parent
         existing = db.query(FileItem).filter(
@@ -735,3 +788,145 @@ class StorageService:
         db.add(audit)
         db.commit()
         return total_freed_bytes
+
+    @classmethod
+    def batch_move(
+        cls,
+        db: Session,
+        org_id: uuid.UUID,
+        item_ids: List[uuid.UUID],
+        new_parent_id: Optional[uuid.UUID],
+        actor: User
+    ) -> BatchMoveResponse:
+        """Moves multiple items to a target directory in an atomic batch with error reporting."""
+        CapabilityService.verify_organization_write_access(db, org_id)
+
+        moved_count = 0
+        failed_count = 0
+        details = []
+
+        for item_id in item_ids:
+            try:
+                cls.move_item(db, org_id, item_id, new_parent_id, actor)
+                moved_count += 1
+                details.append({"id": str(item_id), "status": "SUCCESS"})
+            except Exception as e:
+                failed_count += 1
+                details.append({"id": str(item_id), "status": "FAILED", "error": str(e)})
+
+        return BatchMoveResponse(
+            moved_count=moved_count,
+            failed_count=failed_count,
+            details=details
+        )
+
+    @classmethod
+    def batch_delete(
+        cls,
+        db: Session,
+        org_id: uuid.UUID,
+        item_ids: List[uuid.UUID],
+        permanent: bool,
+        actor: User
+    ) -> BatchDeleteResponse:
+        """Batch soft-delete or permanent purge for multi-item selection."""
+        CapabilityService.verify_organization_write_access(db, org_id)
+
+        total_affected = 0
+        total_freed = 0
+
+        for item_id in item_ids:
+            try:
+                if permanent:
+                    freed = cls.purge_item(db, org_id, item_id, actor)
+                    total_freed += freed
+                    total_affected += 1
+                else:
+                    affected = cls.soft_delete_item(db, org_id, item_id, actor)
+                    total_affected += affected
+            except Exception:
+                continue
+
+        return BatchDeleteResponse(
+            affected_count=total_affected,
+            freed_bytes=total_freed
+        )
+
+    @classmethod
+    def get_storage_analytics(
+        cls,
+        db: Session,
+        org_id: uuid.UUID
+    ) -> StorageAnalyticsResponse:
+        """Computes comprehensive storage utilization breakdown, drive distribution, and top largest files."""
+        org = db.query(Organization).filter(Organization.id == org_id).first()
+        if not org:
+            raise StorageDomainError("ድርጅቱ አልተገኘም (Organization not found)")
+
+        storage_limit_bytes = org.storage_limit_bytes or int(10 * 1024 * 1024 * 1024)
+        total_used_bytes = org.used_storage_bytes or 0
+        pct = round((total_used_bytes / storage_limit_bytes * 100), 2) if storage_limit_bytes > 0 else 0.0
+
+        personal_bytes = db.query(func.coalesce(func.sum(FileItem.size_bytes), 0)).filter(
+            FileItem.organization_id == org_id,
+            FileItem.drive_type == DriveType.PERSONAL,
+            FileItem.is_deleted == False,
+            FileItem.is_folder == False,
+        ).scalar() or 0
+
+        company_bytes = db.query(func.coalesce(func.sum(FileItem.size_bytes), 0)).filter(
+            FileItem.organization_id == org_id,
+            FileItem.drive_type == DriveType.COMPANY,
+            FileItem.is_deleted == False,
+            FileItem.is_folder == False,
+        ).scalar() or 0
+
+        trash_bytes = db.query(func.coalesce(func.sum(FileItem.size_bytes), 0)).filter(
+            FileItem.organization_id == org_id,
+            FileItem.is_deleted == True,
+            FileItem.is_folder == False,
+        ).scalar() or 0
+
+        total_files = db.query(FileItem).filter(
+            FileItem.organization_id == org_id,
+            FileItem.is_folder == False,
+            FileItem.is_deleted == False,
+        ).count()
+
+        total_folders = db.query(FileItem).filter(
+            FileItem.organization_id == org_id,
+            FileItem.is_folder == True,
+            FileItem.is_deleted == False,
+        ).count()
+
+        largest_items = db.query(FileItem).filter(
+            FileItem.organization_id == org_id,
+            FileItem.is_folder == False,
+            FileItem.is_deleted == False,
+        ).order_by(FileItem.size_bytes.desc()).limit(5).all()
+
+        top_largest = [
+            LargestFileSummary(
+                id=item.id,
+                name=item.name,
+                size_bytes=item.size_bytes,
+                drive_type=item.drive_type.value if hasattr(item.drive_type, "value") else str(item.drive_type),
+                owner_name=item.owner.full_name if item.owner else None,
+                created_at=item.created_at,
+                ec_created_at=format_ethiopian_date(item.created_at.date()) if item.created_at else None,
+            )
+            for item in largest_items
+        ]
+
+        return StorageAnalyticsResponse(
+            total_used_bytes=total_used_bytes,
+            storage_limit_bytes=storage_limit_bytes,
+            percentage_used=pct,
+            personal_drive_bytes=personal_bytes,
+            company_drive_bytes=company_bytes,
+            trash_bytes=trash_bytes,
+            total_files=total_files,
+            total_folders=total_folders,
+            top_largest_files=top_largest,
+        )
+

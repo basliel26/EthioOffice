@@ -6,6 +6,7 @@ and Cascading Soft-Delete / Purge lifecycles.
 
 import os
 import uuid
+import urllib.parse
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status
 from fastapi.responses import FileResponse
@@ -23,6 +24,11 @@ from app.schemas.file import (
     FileMoveRequest,
     FileRenameRequest,
     BreadcrumbItem,
+    BatchMoveRequest,
+    BatchMoveResponse,
+    BatchDeleteRequest,
+    BatchDeleteResponse,
+    StorageAnalyticsResponse,
 )
 from app.services.storage_service import (
     StorageService,
@@ -33,6 +39,7 @@ from app.services.storage_service import (
     FileItemConflictError,
     DriveAccessDeniedError,
     FilePayloadMissingError,
+    SecurityViolationError,
 )
 from app.services.tenant_service import StorageQuotaExceededError
 from app.services.capability_service import LicenseReadOnlyLockdownError
@@ -85,6 +92,8 @@ def create_folder(
         )
     except LicenseReadOnlyLockdownError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except SecurityViolationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "SECURITY_VIOLATION", "message": str(e)})
     except FileItemConflictError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except FileItemNotFoundError as e:
@@ -120,12 +129,68 @@ async def upload_file(
         )
     except LicenseReadOnlyLockdownError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except SecurityViolationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "SECURITY_VIOLATION", "message": str(e)})
     except StorageQuotaExceededError as e:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(e))
     except FileItemNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except StorageDomainError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/analytics/summary", response_model=StorageAnalyticsResponse)
+def get_storage_analytics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns organization storage quota analytics, drive partitioning breakdown, and top files.
+    """
+    return StorageService.get_storage_analytics(db, current_user.organization_id)
+
+
+@router.patch("/batch/move", response_model=BatchMoveResponse)
+def batch_move_items(
+    payload: BatchMoveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Move multiple files or folders to a target parent directory in an atomic batch.
+    """
+    try:
+        return StorageService.batch_move(
+            db=db,
+            org_id=current_user.organization_id,
+            item_ids=payload.item_ids,
+            new_parent_id=payload.new_parent_id,
+            actor=current_user,
+        )
+    except LicenseReadOnlyLockdownError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+
+
+@router.delete("/batch/delete", response_model=BatchDeleteResponse)
+def batch_delete_items(
+    payload: BatchDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Bulk soft-delete or permanently purge selected files and folders.
+    """
+    try:
+        return StorageService.batch_delete(
+            db=db,
+            org_id=current_user.organization_id,
+            item_ids=payload.item_ids,
+            permanent=payload.permanent,
+            actor=current_user,
+        )
+    except LicenseReadOnlyLockdownError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+
 
 
 @router.get("/{file_id}/download")
@@ -163,10 +228,25 @@ def download_file(
         db.add(audit)
         db.commit()
 
+        # RFC 5987 Amharic/UTF-8 filename encoding and ETag integrity header
+        ascii_fallback = "".join(c for c in file_item.name if c.isascii() and (c.isalnum() or c in "._- ")).strip()
+        if not ascii_fallback or ascii_fallback.startswith("."):
+            ext = os.path.splitext(file_item.name)[1]
+            ascii_fallback = f"document{ext}" if ext.isascii() else "document.bin"
+
+        encoded_name = urllib.parse.quote(file_item.name, encoding="utf-8")
+        content_disposition = f'attachment; filename="{ascii_fallback}"; filename*=UTF-8\'\'{encoded_name}'
+
+        response_headers = {
+            "ETag": f'"{version.checksum_sha256}"',
+            "Content-Disposition": content_disposition,
+            "Accept-Ranges": "bytes",
+        }
+
         return FileResponse(
             path=full_path,
-            filename=file_item.name,
-            media_type=file_item.mime_type or "application/octet-stream"
+            media_type=file_item.mime_type or "application/octet-stream",
+            headers=response_headers,
         )
     except FileItemNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -242,6 +322,8 @@ def rename_item(
         )
     except LicenseReadOnlyLockdownError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except SecurityViolationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "SECURITY_VIOLATION", "message": str(e)})
     except FileItemConflictError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except FileItemNotFoundError as e:
