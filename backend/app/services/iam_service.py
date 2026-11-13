@@ -72,6 +72,10 @@ class IAMService:
         if not user.is_active:
             raise AuthenticationError("ይህ የተጠቃሚ አካውንት ተዘግቷል (User account is deactivated)")
 
+        # Enterprise Multi-Tenant Status Check: Verify organization is not suspended
+        if hasattr(user.organization, "status") and str(user.organization.status.value if hasattr(user.organization.status, "value") else user.organization.status) == "SUSPENDED":
+            raise AuthenticationError("የድርጅቱ አገልግሎት ለጊዜው ታግዷል፤ እባክዎ የስርዓት አስተዳዳሪውን ያነጋግሩ (Organization subscription is suspended. Please contact your administrator)")
+
         # Generate refresh token
         raw_refresh_token = secrets.token_urlsafe(32)
         token_hash = cls._hash_token(raw_refresh_token)

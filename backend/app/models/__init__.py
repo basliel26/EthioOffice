@@ -1,5 +1,5 @@
 from app.core.database import Base
-from app.models.organization import Organization, License, LicenseTier
+from app.models.organization import Organization, License, LicenseTier, OrganizationStatus
 from app.models.user import User, UserRole
 from app.models.user_session import UserSession
 from app.models.department import Department, UserDepartment
@@ -16,6 +16,7 @@ from app.models.share_link import ShareLink, LinkAccessType
 __all__ = [
     "Base",
     "Organization",
+    "OrganizationStatus",
     "License",
     "LicenseTier",
     "User",

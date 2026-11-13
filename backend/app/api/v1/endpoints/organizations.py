@@ -5,15 +5,49 @@ from app.models.user import User
 from app.services.tenant_service import (
     TenantService, 
     TenantNotFoundError, 
-    StorageQuotaExceededError
+    DepartmentConflictError,
 )
 from app.schemas.tenant import (
     OrganizationResponse, 
     OrganizationUpdate, 
-    StorageQuotaResponse
+    StorageQuotaResponse,
+    TenantBrandingPublicResponse,
+    TenantProvisionRequest,
+    TenantProvisionResponse,
 )
 
 router = APIRouter()
+
+
+@router.get("/branding/{slug}", response_model=TenantBrandingPublicResponse)
+def get_tenant_branding(
+    slug: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Public endpoint for branded pre-login portal resolution.
+    Returns corporate name, logo, theme color, and active status.
+    """
+    try:
+        return TenantService.get_branding_by_slug(db, slug)
+    except TenantNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/provision", response_model=TenantProvisionResponse, status_code=status.HTTP_201_CREATED)
+def provision_tenant(
+    payload: TenantProvisionRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    1-Click Automated Enterprise Tenant Provisioning:
+    Creates Organization, binds commercial license, provisions admin user,
+    default Ethiopian departments (FIN, HR, OPS), and root company drive spaces.
+    """
+    try:
+        return TenantService.provision_tenant(db, payload)
+    except DepartmentConflictError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.get("/profile", response_model=OrganizationResponse)
@@ -38,7 +72,7 @@ def update_organization_profile(
     current_admin: User = Depends(get_current_admin),
 ):
     """
-    Update organization profile (name, TIN number, logo, branding color).
+    Update organization profile (name, TIN number, logo, branding color, status).
     Requires ADMIN privileges.
     """
     try:

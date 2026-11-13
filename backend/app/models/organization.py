@@ -13,6 +13,13 @@ class LicenseTier(str, enum.Enum):
     ENTERPRISE = "ENTERPRISE"
 
 
+class OrganizationStatus(str, enum.Enum):
+    TRIAL = "TRIAL"
+    ACTIVE = "ACTIVE"
+    SUSPENDED = "SUSPENDED"
+    ARCHIVED = "ARCHIVED"
+
+
 class Organization(Base):
     __tablename__ = "organizations"
 
@@ -23,6 +30,7 @@ class Organization(Base):
     logo_url = Column(String(512), nullable=True)
     theme_color = Column(String(20), default="#059669", nullable=False)  # Primary branding hex color
     
+    status = Column(Enum(OrganizationStatus, name="org_status_enum"), default=OrganizationStatus.ACTIVE, nullable=False, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
     max_users = Column(Integer, default=50, nullable=False)
     storage_limit_bytes = Column(BigInteger, default=100 * 1024 * 1024 * 1024, nullable=False)  # Default 100 GB
