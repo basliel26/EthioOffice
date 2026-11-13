@@ -1,10 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import uuid
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_user
-from app.core.security import verify_password, create_access_token
 from app.models.user import User
-from app.models.audit import AuditLog, AuditAction
-from app.schemas.auth import LoginRequest, Token, UserResponse, DepartmentSummary, OrganizationSummary
+from app.services.iam_service import (
+    IAMService, 
+    AuthenticationError, 
+    TokenInvalidError, 
+    PasswordValidationError
+)
+from app.schemas.iam import (
+    LoginRequest, 
+    DualTokenResponse, 
+    RefreshTokenRequest, 
+    PasswordChangeRequest, 
+    SessionResponse
+)
+from app.schemas.auth import UserResponse, DepartmentSummary, OrganizationSummary
 
 router = APIRouter()
 
@@ -33,52 +46,67 @@ def build_user_response(user: User) -> UserResponse:
     )
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=DualTokenResponse)
 def login(
     payload: LoginRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
-    Authenticate employee and return signed JWT access token.
+    Authenticate employee, issue short-lived JWT access token and secure rotated refresh token.
     """
-    user = db.query(User).filter(User.email == payload.email.lower().strip()).first()
-    if not user or not verify_password(payload.password, user.hashed_password):
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    try:
+        user, access_token, refresh_token = IAMService.authenticate(
+            db=db,
+            email=payload.email,
+            password=payload.password,
+            client_ip=client_ip,
+            user_agent=user_agent
+        )
+    except AuthenticationError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User account is deactivated"
-        )
-    
-    # Audit log login action
-    audit = AuditLog(
-        organization_id=user.organization_id,
-        user_id=user.id,
-        action=AuditAction.LOGIN,
-        target_type="USER",
-        target_id=user.id,
-        target_name=user.full_name,
-        details={"email": user.email}
-    )
-    db.add(audit)
-    db.commit()
 
-    access_token = create_access_token(
-        subject=user.id,
-        organization_id=user.organization_id,
-        role=user.role.value if hasattr(user.role, "value") else str(user.role)
-    )
-
-    return Token(
+    return DualTokenResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
         token_type="bearer",
         user=build_user_response(user)
     )
+
+
+@router.post("/refresh")
+def refresh_token(
+    payload: RefreshTokenRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Rotate refresh token and issue a fresh access token.
+    """
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    try:
+        new_access_token, new_refresh_token = IAMService.rotate_refresh_token(
+            db=db,
+            refresh_token=payload.refresh_token,
+            client_ip=client_ip,
+            user_agent=user_agent
+        )
+        return {
+            "access_token": new_access_token,
+            "refresh_token": new_refresh_token,
+            "token_type": "bearer"
+        }
+    except TokenInvalidError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
 
 @router.get("/me", response_model=UserResponse)
@@ -89,3 +117,75 @@ def get_current_user_profile(
     Fetch profile of currently logged-in user including organization and departments.
     """
     return build_user_response(current_user)
+
+
+@router.get("/sessions", response_model=List[SessionResponse])
+def get_active_sessions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    List all active device sessions for the authenticated user.
+    """
+    sessions = IAMService.list_active_sessions(db, current_user.id)
+    return [
+        SessionResponse(
+            id=s.id,
+            client_ip=s.client_ip,
+            user_agent=s.user_agent,
+            last_active_at=s.last_active_at,
+            created_at=s.created_at,
+            is_current=False
+        )
+        for s in sessions
+    ]
+
+
+@router.post("/sessions/{session_id}/revoke")
+def revoke_session(
+    session_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Remotely revoke a specific device session.
+    """
+    success = IAMService.revoke_session(db, current_user.id, session_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"message": "Session successfully revoked"}
+
+
+@router.post("/logout-all")
+def logout_all_devices(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Revoke all device sessions across all browsers and apps for this user.
+    """
+    revoked_count = IAMService.revoke_all_sessions(db, current_user.id)
+    return {"message": f"Successfully revoked {revoked_count} active sessions"}
+
+
+@router.post("/change-password")
+def change_password(
+    payload: PasswordChangeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Change account password and automatically terminate all other sessions.
+    """
+    try:
+        IAMService.change_password(
+            db=db,
+            user=current_user,
+            current_password=payload.current_password,
+            new_password=payload.new_password
+        )
+        return {"message": "የይለፍ ቃል በተሳካ ሁኔታ ተቀይሯል (Password successfully updated)"}
+    except AuthenticationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except PasswordValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

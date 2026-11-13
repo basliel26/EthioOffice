@@ -1,6 +1,7 @@
 from app.core.database import Base
 from app.models.organization import Organization, License, LicenseTier
 from app.models.user import User, UserRole
+from app.models.user_session import UserSession
 from app.models.department import Department, UserDepartment
 from app.models.file import FileItem, FileVersion, DriveType
 from app.models.share import FileShare, SharePermission
@@ -19,6 +20,7 @@ __all__ = [
     "LicenseTier",
     "User",
     "UserRole",
+    "UserSession",
     "Department",
     "UserDepartment",
     "FileItem",

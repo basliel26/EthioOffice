@@ -38,3 +38,4 @@ class User(Base):
     owned_files = relationship("FileItem", back_populates="owner", foreign_keys="FileItem.owner_id")
     file_versions = relationship("FileVersion", back_populates="created_by")
     locks = relationship("FileLock", back_populates="locked_by")
+    sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
