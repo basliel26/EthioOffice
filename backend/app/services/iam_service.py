@@ -7,7 +7,7 @@ from typing import Tuple, Optional, List
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import verify_password, get_password_hash, create_access_token
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.user_session import UserSession
 from app.models.audit import AuditLog, AuditAction
 
@@ -215,3 +215,60 @@ class IAMService:
         cls.revoke_all_sessions(db, user.id)
         db.commit()
         return True
+
+    @classmethod
+    def create_user(
+        cls,
+        db: Session,
+        org_id: uuid.UUID,
+        email: str,
+        password: str,
+        full_name: str,
+        role: UserRole = UserRole.STAFF,
+        actor: Optional[User] = None
+    ) -> User:
+        """
+        Provisions a new employee account under the organization.
+        Enforces Module 3 seat limits: blocks creation if active seats reached licensed capacity.
+        """
+        clean_email = email.lower().strip()
+        
+        # Check uniqueness
+        existing = db.query(User).filter(User.email == clean_email).first()
+        if existing:
+            raise AuthenticationError("ይህ ኢሜይል አስቀድሞ ተመዝግቧል (Email is already registered)")
+
+        # Validate password strength
+        cls.validate_password_strength(password)
+
+        # Enforce seat limits
+        from app.services.capability_service import CapabilityService
+        CapabilityService.enforce_seat_limit(db, org_id)
+
+        # Create user
+        new_user = User(
+            organization_id=org_id,
+            email=clean_email,
+            full_name=full_name.strip(),
+            hashed_password=get_password_hash(password),
+            role=role,
+            is_active=True,
+        )
+        db.add(new_user)
+        db.flush()
+
+        if actor:
+            audit = AuditLog(
+                organization_id=org_id,
+                user_id=actor.id,
+                action=AuditAction.LOGIN,
+                target_type="USER",
+                target_id=new_user.id,
+                target_name=new_user.full_name,
+                details={"action": "USER_PROVISIONED", "email": new_user.email, "role": str(role)}
+            )
+            db.add(audit)
+
+        db.commit()
+        db.refresh(new_user)
+        return new_user

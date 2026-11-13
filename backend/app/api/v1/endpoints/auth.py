@@ -2,20 +2,22 @@ import uuid
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
-from app.api.deps import get_db, get_current_user
-from app.models.user import User
+from app.api.deps import get_db, get_current_user, get_current_admin
+from app.models.user import User, UserRole
 from app.services.iam_service import (
     IAMService, 
     AuthenticationError, 
     TokenInvalidError, 
     PasswordValidationError
 )
+from app.services.capability_service import SeatLimitExceededError
 from app.schemas.iam import (
     LoginRequest, 
     DualTokenResponse, 
     RefreshTokenRequest, 
     PasswordChangeRequest, 
-    SessionResponse
+    SessionResponse,
+    CreateUserRequest,
 )
 from app.schemas.auth import UserResponse, DepartmentSummary, OrganizationSummary
 
@@ -187,5 +189,40 @@ def change_password(
         return {"message": "የይለፍ ቃል በተሳካ ሁኔታ ተቀይሯል (Password successfully updated)"}
     except AuthenticationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except PasswordValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def create_organization_user(
+    payload: CreateUserRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """
+    Provision a new employee under the organization.
+    Requires ADMIN privileges. Enforces license seat limits.
+    """
+    role_enum = (
+        UserRole[payload.role.upper()]
+        if payload.role and payload.role.upper() in UserRole.__members__
+        else UserRole.STAFF
+    )
+
+    try:
+        user = IAMService.create_user(
+            db=db,
+            org_id=current_admin.organization_id,
+            email=payload.email,
+            password=payload.password,
+            full_name=payload.full_name,
+            role=role_enum,
+            actor=current_admin,
+        )
+        return build_user_response(user)
+    except SeatLimitExceededError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except AuthenticationError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except PasswordValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

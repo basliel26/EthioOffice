@@ -138,8 +138,8 @@ class TenantProvisionRequest(BaseModel):
     admin_email: EmailStr
     admin_full_name: str = Field(..., min_length=2)
     admin_password: str = Field(..., min_length=8)
-    storage_limit_gb: float = Field(100.0, ge=10.0)
-    max_users: int = Field(50, ge=5)
+    storage_limit_gb: float = Field(100.0, ge=1.0)
+    max_users: int = Field(50, ge=1)
 
     @field_validator("tin_number")
     @classmethod

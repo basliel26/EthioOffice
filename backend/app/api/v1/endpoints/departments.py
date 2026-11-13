@@ -10,6 +10,7 @@ from app.services.tenant_service import (
     DepartmentNotFoundError,
     CrossTenantAccessError,
 )
+from app.services.capability_service import FeatureNotLicensedError
 from app.schemas.tenant import (
     DepartmentCreate,
     DepartmentResponse,
@@ -57,6 +58,10 @@ def create_department(
             leads=[],
             created_at=dept.created_at
         )
+    except FeatureNotLicensedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except DepartmentNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except DepartmentConflictError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 

@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = "ethiooffice-dev-secret-key-change-in-production-12345"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 day
+    LICENSE_SIGNING_KEY: str = "ethiooffice-offline-licensing-master-key-2026"
     
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = [

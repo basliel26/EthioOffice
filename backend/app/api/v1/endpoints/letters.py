@@ -10,8 +10,9 @@ from app.core.ethiopian_calendar import format_ethiopian_date, gregorian_to_ethi
 from app.models.user import User
 from app.models.letter import LetterRegistry, LetterDirection, LetterStatus
 from app.models.audit import AuditLog, AuditAction
+from app.services.capability_service import require_capability, Capability
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_capability(Capability.LETTER_REGISTRY))])
 
 
 class LetterCreate(BaseModel):

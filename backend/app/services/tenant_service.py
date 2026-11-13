@@ -8,6 +8,8 @@ from app.models.user import User, UserRole
 from app.models.file import FileItem, DriveType
 from app.models.audit import AuditLog, AuditAction
 from app.core.security import get_password_hash
+from app.core.licensing import generate_license_token
+from app.services.capability_service import CapabilityService, Capability, DEFAULT_TIER_CAPABILITIES, FeatureNotLicensedError
 from app.schemas.tenant import (
     OrganizationUpdate,
     DepartmentCreate,
@@ -193,6 +195,12 @@ class TenantService:
 
         # Validate parent department if provided (must belong to same org)
         if payload.parent_id:
+            if not CapabilityService.has_capability(db, org_id, Capability.DEPARTMENT_HIERARCHY):
+                raise FeatureNotLicensedError(
+                    "ቅርንጫፍ የሥራ ክፍሎችን (Subdepartments) የማዋቀር አገልግሎት በድርጅትዎ የፈቃድ ደረጃ አልተካተተም። እባክዎ ወደ Business ወይም Enterprise ደረጃ ያሳድጉ "
+                    "(Subdepartments hierarchy requires a Business or Enterprise license tier)"
+                )
+
             parent = db.query(Department).filter(
                 Department.id == payload.parent_id,
                 Department.organization_id == org_id
@@ -399,14 +407,29 @@ class TenantService:
         db.add(org)
         db.flush()
 
-        # 2. Commercial License
+        # 2. Commercial License (Cryptographically signed offline token)
+        tier_capabilities = [c.value for c in DEFAULT_TIER_CAPABILITIES[LicenseTier.BUSINESS]]
+        expires_at = datetime.now(timezone.utc) + timedelta(days=365)
+        
+        signed_key = generate_license_token(
+            organization_slug=org.slug,
+            tier=LicenseTier.BUSINESS.value,
+            max_users=payload.max_users,
+            storage_limit_gb=payload.storage_limit_gb,
+            features=tier_capabilities,
+            expires_at=expires_at,
+            grace_period_days=14,
+        )
+
         license_record = License(
             organization_id=org.id,
-            license_key=f"EO-{org.slug.upper()}-{uuid.uuid4().hex[:12].upper()}",
+            license_key=signed_key,
             tier=LicenseTier.BUSINESS,
             max_users=payload.max_users,
             storage_limit_bytes=storage_bytes,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=365),
+            features=",".join(tier_capabilities),
+            grace_period_days=14,
+            expires_at=expires_at,
             is_active=True,
         )
         db.add(license_record)

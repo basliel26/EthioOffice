@@ -39,3 +39,11 @@ class User(Base):
     file_versions = relationship("FileVersion", back_populates="created_by")
     locks = relationship("FileLock", back_populates="locked_by")
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+
+    @property
+    def is_superuser(self) -> bool:
+        return self.role == UserRole.SUPER_ADMIN
+
+    @property
+    def is_admin(self) -> bool:
+        return self.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]

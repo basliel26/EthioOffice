@@ -53,11 +53,13 @@ class License(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), unique=True, nullable=False)
-    license_key = Column(String(512), unique=True, nullable=False, index=True)
+    license_key = Column(String(1024), unique=True, nullable=False, index=True)
     tier = Column(Enum(LicenseTier, name="license_tier_enum"), default=LicenseTier.BUSINESS, nullable=False)
     
     max_users = Column(Integer, nullable=False)
     storage_limit_bytes = Column(BigInteger, nullable=False)
+    features = Column(String(1024), nullable=True)  # Comma-separated list of granted capabilities
+    grace_period_days = Column(Integer, default=14, nullable=False)
     
     issued_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
