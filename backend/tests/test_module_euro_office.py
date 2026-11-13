@@ -544,3 +544,141 @@ def test_callback_write_lockdown_enforcement(mock_fetch, db_session):
     r_lockdown = client.post("/api/v1/euro-office/callback", json=cb_payload)
     assert r_lockdown.status_code == 403
     assert r_lockdown.json()["detail"]["code"] == "LICENSE_LOCKDOWN_READ_ONLY"
+
+
+# =====================================================================
+# Test 12: Callback Idempotency Prevents Version Storm
+# =====================================================================
+
+@patch("app.services.euro_office_service.fetch_edited_document")
+def test_callback_idempotency_prevents_version_storm(mock_fetch, db_session):
+    """
+    Verifies that when Euro-Office sends duplicate callbacks with identical binary
+    content, the backend acknowledges success without creating redundant version snapshots.
+    """
+    identical_bytes = b"Exact Same Document Bytes Sent Twice"
+    mock_fetch.return_value = identical_bytes
+
+    tenant = create_euro_tenant_and_users("idempotent")
+    staff_a = tenant["staff_a_headers"]
+
+    files = {"file": ("Tax_Declaration.docx", io.BytesIO(b"Initial Tax Doc"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
+    r_up = client.post("/api/v1/files/upload", files=files, data={"drive_type": "PERSONAL"}, headers=staff_a)
+    file_id = r_up.json()["id"]
+
+    r_cfg = client.get(f"/api/v1/euro-office/config/{file_id}", headers=staff_a)
+    doc_key = r_cfg.json()["document"]["key"]
+
+    cb_payload = {
+        "key": doc_key,
+        "status": 6,
+        "url": "http://documentserver:8080/cache/Tax_Declaration.docx",
+        "users": [tenant["staff_a_id"]],
+    }
+
+    # 1. First callback creates Version 2
+    r_cb1 = client.post("/api/v1/euro-office/callback", json=cb_payload)
+    assert r_cb1.status_code == 200
+    assert "committed" in r_cb1.json()["message"]
+
+    r_ver1 = client.get(f"/api/v1/files/{file_id}/versions", headers=staff_a)
+    assert len(r_ver1.json()) == 2
+
+    # 2. Second callback with identical bytes -> Idempotency skips version creation
+    r_cb2 = client.post("/api/v1/euro-office/callback", json=cb_payload)
+    assert r_cb2.status_code == 200
+    assert "Idempotent callback skipped" in r_cb2.json()["message"]
+
+    # Verify version count remains exactly 2!
+    r_ver2 = client.get(f"/api/v1/files/{file_id}/versions", headers=staff_a)
+    assert len(r_ver2.json()) == 2
+
+
+# =====================================================================
+# Test 13: Euro-Office Health Probe
+# =====================================================================
+
+def test_euro_office_health_probe():
+    """
+    Verifies that the /health endpoint reports document server readiness,
+    supported office formats, and Ethiopian font family defaults.
+    """
+    r_health = client.get("/api/v1/euro-office/health")
+    assert r_health.status_code == 200
+    health = r_health.json()
+
+    assert "status" in health
+    assert health["jwt_enabled"] is True
+    assert "word" in health["supported_formats"]
+    assert "cell" in health["supported_formats"]
+    assert "slide" in health["supported_formats"]
+    assert health["default_ethiopian_font"] == "Abyssinica SIL"
+
+
+# =====================================================================
+# Test 14: Command Service Dispatcher: Forcesave and Drop
+# =====================================================================
+
+def test_command_service_dispatcher_forcesave_and_drop(db_session):
+    """
+    Verifies that an Editor/Admin can dispatch 'forcesave' and 'drop' commands
+    to control active document sessions.
+    """
+    tenant = create_euro_tenant_and_users("cmd-dispatch")
+    staff_a = tenant["staff_a_headers"]
+
+    files = {"file": ("Command_Test.docx", io.BytesIO(b"Command Test Content"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
+    r_up = client.post("/api/v1/files/upload", files=files, data={"drive_type": "PERSONAL"}, headers=staff_a)
+    file_id = r_up.json()["id"]
+
+    # 1. Dispatch forcesave
+    r_forcesave = client.post(
+        "/api/v1/euro-office/command",
+        json={"command": "forcesave", "file_id": file_id},
+        headers=staff_a,
+    )
+    assert r_forcesave.status_code == 200
+    assert r_forcesave.json()["error"] == 0
+    assert r_forcesave.json()["command"] == "forcesave"
+
+    # 2. Dispatch drop (terminates session)
+    r_drop = client.post(
+        "/api/v1/euro-office/command",
+        json={"command": "drop", "file_id": file_id},
+        headers=staff_a,
+    )
+    assert r_drop.status_code == 200
+    assert r_drop.json()["error"] == 0
+    assert r_drop.json()["command"] == "drop"
+
+
+# =====================================================================
+# Test 15: Document Session History Audit
+# =====================================================================
+
+def test_document_session_history_audit(db_session):
+    """
+    Verifies that /sessions returns the historical audit trail of editing sessions
+    with Ethiopian calendar timestamps (ዓ.ም).
+    """
+    tenant = create_euro_tenant_and_users("sess-audit")
+    staff_a = tenant["staff_a_headers"]
+
+    files = {"file": ("Audit_Ledger.xlsx", io.BytesIO(b"Audit Ledger Content"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+    r_up = client.post("/api/v1/files/upload", files=files, data={"drive_type": "PERSONAL"}, headers=staff_a)
+    file_id = r_up.json()["id"]
+
+    # Generate config to create a session
+    client.get(f"/api/v1/euro-office/config/{file_id}", headers=staff_a)
+
+    # Query session history
+    r_hist = client.get(f"/api/v1/euro-office/{file_id}/sessions", headers=staff_a)
+    assert r_hist.status_code == 200
+    hist = r_hist.json()
+
+    assert hist["total_sessions"] >= 1
+    assert len(hist["sessions"]) >= 1
+    session_item = hist["sessions"][0]
+    assert session_item["file_id"] == file_id
+    assert "ዓ.ም" in session_item["ec_created_at"]
+

@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
@@ -30,6 +31,9 @@ class EditorCustomization(BaseModel):
     chat: bool = True
     comments: bool = True
     customer: Optional[Dict[str, str]] = None
+    defaultFont: str = "Abyssinica SIL"
+    font: Optional[Dict[str, Any]] = None
+    uiTheme: str = "theme-classic-light"
 
 
 class EditorConfig(BaseModel):
@@ -76,3 +80,41 @@ class ActiveCoAuthorsResponse(BaseModel):
     is_editing: bool
     coauthor_count: int
     coauthors: List[CoAuthorItem]
+
+
+class EuroOfficeHealthResponse(BaseModel):
+    status: str  # "UP" | "DEGRADED" | "UNCONFIGURED"
+    document_server_url: str
+    jwt_enabled: bool
+    supported_formats: List[str]
+    default_ethiopian_font: str
+
+
+class EuroOfficeCommandRequest(BaseModel):
+    command: str  # "forcesave" | "drop" | "info"
+    file_id: uuid.UUID
+    userdata: Optional[str] = None
+
+
+class EuroOfficeCommandResponse(BaseModel):
+    error: int = 0
+    key: str
+    command: str
+    message: str
+
+
+class EuroOfficeSessionItem(BaseModel):
+    id: uuid.UUID
+    document_key: str
+    file_id: uuid.UUID
+    active_user_count: int
+    is_editing: bool
+    last_saved_at: Optional[datetime] = None
+    created_at: datetime
+    ec_created_at: Optional[str] = None
+
+
+class EuroOfficeSessionHistoryResponse(BaseModel):
+    file_id: uuid.UUID
+    total_sessions: int
+    sessions: List[EuroOfficeSessionItem]

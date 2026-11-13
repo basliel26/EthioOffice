@@ -29,9 +29,22 @@ from app.schemas.euro_office import (
     EuroOfficeCallbackPayload,
     EuroOfficeCallbackResponse,
     ActiveCoAuthorsResponse,
+    EuroOfficeHealthResponse,
+    EuroOfficeCommandRequest,
+    EuroOfficeCommandResponse,
+    EuroOfficeSessionHistoryResponse,
 )
 
 router = APIRouter()
+
+
+@router.get("/health", response_model=EuroOfficeHealthResponse)
+def get_euro_office_health():
+    """
+    Enterprise health check and readiness probe for Euro-Office / ONLYOFFICE Document Server.
+    Reports operational state (UP, DEGRADED, DOWN), configuration, and font defaults.
+    """
+    return EuroOfficeService.check_health()
 
 
 @router.get("/config/{file_id}", response_model=EuroOfficeConfigResponse)
@@ -146,6 +159,7 @@ async def euro_office_callback(
     Webhook callback handler invoked by ONLYOFFICE / Euro-Office Document Server.
     Authenticates HMAC-SHA256 signature, processes Status 1 (editing),
     Status 2 (save version), Status 4 (close), and Status 6 (force-save).
+    Protects against version storms via SHA-256 payload idempotency.
     Returns {"error": 0} on success.
     """
     body = await request.body()
@@ -182,6 +196,55 @@ def get_active_coauthors(
             org_id=current_user.organization_id,
             file_id=file_id,
             current_user=current_user,
+        )
+    except FileItemNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.post("/command", response_model=EuroOfficeCommandResponse)
+def dispatch_document_command(
+    payload: EuroOfficeCommandRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Enterprise Command Service dispatcher:
+    Dispatches programmatic administrative commands ('forcesave', 'drop', 'info')
+    to the Euro-Office Document Server with HMAC-SHA256 authorization.
+    """
+    try:
+        return EuroOfficeService.dispatch_command(
+            db=db,
+            org_id=current_user.organization_id,
+            file_id=payload.file_id,
+            command=payload.command,
+            actor=current_user,
+            userdata=payload.userdata,
+        )
+    except FileItemNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.get("/{file_id}/sessions", response_model=EuroOfficeSessionHistoryResponse)
+def get_document_session_history(
+    file_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Enterprise audit trail of historical collaborative editing sessions
+    with Ethiopian calendar timestamps (ዓ.ም).
+    """
+    try:
+        return EuroOfficeService.get_session_history(
+            db=db,
+            org_id=current_user.organization_id,
+            file_id=file_id,
+            actor=current_user,
         )
     except FileItemNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
