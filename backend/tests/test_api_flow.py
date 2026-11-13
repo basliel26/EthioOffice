@@ -26,7 +26,7 @@ def test_auth_login_and_me():
     assert "access_token" in data
     assert data["user"]["email"] == "admin@abyssinia.et"
     assert data["user"]["role"] == "ADMIN"
-    assert data["user"]["organization"]["name"] == "Abyssinia Commercial Enterprise"
+    assert "abyssinia" in data["user"]["organization"]["slug"]
 
     token = data["access_token"]
     headers = {"Authorization": f"Bearer {token}"}

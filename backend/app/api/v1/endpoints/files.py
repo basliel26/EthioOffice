@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.api.deps import get_current_user
 from app.core.ethiopian_calendar import format_ethiopian_date
+from app.services.tenant_service import TenantService, StorageQuotaExceededError
 from app.models.user import User
 from app.models.file import FileItem, FileVersion, DriveType
 from app.models.share import FileShare, SharePermission
@@ -164,6 +165,15 @@ async def upload_file(
             detail=f"File exceeds maximum upload size of {settings.MAX_UPLOAD_SIZE_MB}MB"
         )
 
+    # Check organizational storage quota
+    try:
+        TenantService.check_storage_budget(db, current_user.organization_id, size_bytes)
+    except StorageQuotaExceededError as e:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=str(e)
+        )
+
     # Calculate SHA-256 checksum
     sha256_hash = hashlib.sha256(content).hexdigest()
 
@@ -210,6 +220,9 @@ async def upload_file(
     db.flush()
 
     file_item.current_version_id = version_1.id
+
+    # Record storage usage delta
+    TenantService.record_storage_change(db, current_user.organization_id, size_bytes)
 
     # Audit log
     audit = AuditLog(
