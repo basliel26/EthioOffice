@@ -39,8 +39,10 @@ class FileVersionSummary(BaseModel):
     version_number: int
     size_bytes: int
     checksum_sha256: str
+    change_summary: Optional[str] = None
+    created_by_name: Optional[str] = None
     created_at: datetime
-    ec_created_at: str
+    ec_created_at: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -77,7 +79,15 @@ class ShareCreateRequest(BaseModel):
 
 class LockRequest(BaseModel):
     reason: Optional[str] = "Editing document"
-    duration_minutes: int = 120  # Default 2 hours
+    duration_minutes: int = Field(120, ge=1, le=1440)  # Max 24 hours
+
+
+class UnlockRequest(BaseModel):
+    force: bool = False
+
+
+class RevertVersionRequest(BaseModel):
+    target_version_number: int = Field(..., ge=1)
 
 
 class BatchMoveRequest(BaseModel):

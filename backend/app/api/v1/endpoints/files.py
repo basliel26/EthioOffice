@@ -29,6 +29,11 @@ from app.schemas.file import (
     BatchDeleteRequest,
     BatchDeleteResponse,
     StorageAnalyticsResponse,
+    FileVersionSummary,
+    FileLockInfo,
+    LockRequest,
+    UnlockRequest,
+    RevertVersionRequest,
 )
 from app.services.storage_service import (
     StorageService,
@@ -40,6 +45,14 @@ from app.services.storage_service import (
     DriveAccessDeniedError,
     FilePayloadMissingError,
     SecurityViolationError,
+    FileLockedError,
+)
+from app.services.version_service import (
+    VersionService,
+    VersionDomainError,
+    VersionNotFoundError,
+    LockNotFoundError,
+    LockPermissionDeniedError,
 )
 from app.services.tenant_service import StorageQuotaExceededError
 from app.services.capability_service import LicenseReadOnlyLockdownError
@@ -92,6 +105,8 @@ def create_folder(
         )
     except LicenseReadOnlyLockdownError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except FileLockedError as e:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": "FILE_LOCKED", "message": str(e), "locked_by": getattr(e, 'locked_by_name', None)})
     except SecurityViolationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "SECURITY_VIOLATION", "message": str(e)})
     except FileItemConflictError as e:
@@ -129,6 +144,8 @@ async def upload_file(
         )
     except LicenseReadOnlyLockdownError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except FileLockedError as e:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": "FILE_LOCKED", "message": str(e), "locked_by": getattr(e, 'locked_by_name', None)})
     except SecurityViolationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "SECURITY_VIOLATION", "message": str(e)})
     except StorageQuotaExceededError as e:
@@ -294,6 +311,8 @@ def move_item(
         )
     except LicenseReadOnlyLockdownError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except FileLockedError as e:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": "FILE_LOCKED", "message": str(e), "locked_by": getattr(e, 'locked_by_name', None)})
     except FolderCycleError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "CYCLE_DETECTED", "message": str(e)})
     except FileItemNotFoundError as e:
@@ -322,6 +341,8 @@ def rename_item(
         )
     except LicenseReadOnlyLockdownError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except FileLockedError as e:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": "FILE_LOCKED", "message": str(e), "locked_by": getattr(e, 'locked_by_name', None)})
     except SecurityViolationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "SECURITY_VIOLATION", "message": str(e)})
     except FileItemConflictError as e:
@@ -347,6 +368,8 @@ def delete_item(
         return {"message": f"Successfully moved {affected} item(s) to Recycle Bin", "affected_count": affected}
     except LicenseReadOnlyLockdownError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except FileLockedError as e:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": "FILE_LOCKED", "message": str(e), "locked_by": getattr(e, 'locked_by_name', None)})
     except FileItemNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except DriveAccessDeniedError as e:
@@ -387,5 +410,230 @@ def purge_item_permanently(
         return {"message": f"Item permanently deleted. Freed {freed_bytes} bytes", "freed_bytes": freed_bytes}
     except LicenseReadOnlyLockdownError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except FileLockedError as e:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": "FILE_LOCKED", "message": str(e), "locked_by": getattr(e, 'locked_by_name', None)})
     except FileItemNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# =====================================================================
+# Module 5: Versioning & Concurrency Control (File Locking) Endpoints
+# =====================================================================
+
+@router.post("/{file_id}/versions", response_model=FileItemResponse, status_code=status.HTTP_201_CREATED)
+async def upload_new_version(
+    file_id: uuid.UUID,
+    file: UploadFile = File(...),
+    change_summary: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Upload a new version (vN+1) of an existing document.
+    Enforces check-out lock ownership, 64KB chunk streaming, CAS deduplication, and quota budgeting.
+    """
+    try:
+        return VersionService.upload_new_version(
+            db=db,
+            org_id=current_user.organization_id,
+            file_id=file_id,
+            stream=file.file,
+            filename=file.filename or "updated_file.bin",
+            actor=current_user,
+            change_summary=change_summary,
+            content_type=file.content_type,
+        )
+    except LicenseReadOnlyLockdownError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except FileLockedError as e:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": "FILE_LOCKED", "message": str(e), "locked_by": getattr(e, 'locked_by_name', None)})
+    except SecurityViolationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "SECURITY_VIOLATION", "message": str(e)})
+    except StorageQuotaExceededError as e:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(e))
+    except (FileItemNotFoundError, VersionNotFoundError) as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except (StorageDomainError, VersionDomainError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/{file_id}/versions", response_model=List[FileVersionSummary])
+def list_versions(
+    file_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List all historical versions of a document, ordered newest first.
+    """
+    try:
+        return VersionService.list_versions(db, current_user.organization_id, file_id, current_user)
+    except FileItemNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except VersionDomainError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/{file_id}/versions/{version_number}/download")
+def download_historical_version(
+    file_id: uuid.UUID,
+    version_number: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Download a specific historical version payload with ETag and RFC 5987 Amharic encoding.
+    """
+    try:
+        file_item, version, full_path = VersionService.get_version_file_info(
+            db, current_user.organization_id, file_id, version_number, current_user
+        )
+
+        base_name, ext = os.path.splitext(file_item.name)
+        v_filename = f"{base_name}_v{version.version_number}{ext}"
+
+        ascii_fallback = "".join(c for c in v_filename if c.isascii() and (c.isalnum() or c in "._- ")).strip()
+        if not ascii_fallback or ascii_fallback.startswith("."):
+            ascii_fallback = f"document_v{version.version_number}{ext}" if ext.isascii() else f"document_v{version.version_number}.bin"
+
+        encoded_name = urllib.parse.quote(v_filename, encoding="utf-8")
+        content_disposition = f'attachment; filename="{ascii_fallback}"; filename*=UTF-8\'\'{encoded_name}'
+
+        headers = {
+            "ETag": f'"{version.checksum_sha256}"',
+            "Content-Disposition": content_disposition,
+            "Accept-Ranges": "bytes",
+        }
+
+        # Audit log download
+        audit = AuditLog(
+            organization_id=current_user.organization_id,
+            user_id=current_user.id,
+            action=AuditAction.DOWNLOAD,
+            target_type="FILE",
+            target_id=file_item.id,
+            target_name=file_item.name,
+            details={"version": version.version_number, "size_bytes": version.size_bytes}
+        )
+        db.add(audit)
+        db.commit()
+
+        return FileResponse(
+            path=full_path,
+            media_type=file_item.mime_type or "application/octet-stream",
+            headers=headers,
+        )
+    except (FileItemNotFoundError, VersionNotFoundError) as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except VersionDomainError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{file_id}/versions/{version_number}/revert", response_model=FileItemResponse)
+def revert_to_version(
+    file_id: uuid.UUID,
+    version_number: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Rollback document to historical version N. Creates version (latest+1) reusing the historical payload (zero storage copy).
+    """
+    try:
+        return VersionService.revert_to_version(
+            db, current_user.organization_id, file_id, version_number, current_user
+        )
+    except LicenseReadOnlyLockdownError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except FileLockedError as e:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": "FILE_LOCKED", "message": str(e), "locked_by": getattr(e, 'locked_by_name', None)})
+    except (FileItemNotFoundError, VersionNotFoundError) as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except VersionDomainError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{file_id}/lock", response_model=FileLockInfo)
+def acquire_file_lock(
+    file_id: uuid.UUID,
+    payload: LockRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Acquire exclusive check-out lock on a document.
+    """
+    try:
+        return VersionService.acquire_lock(
+            db=db,
+            org_id=current_user.organization_id,
+            file_id=file_id,
+            actor=current_user,
+            reason=payload.reason,
+            duration_minutes=payload.duration_minutes,
+        )
+    except LicenseReadOnlyLockdownError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except FileLockedError as e:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": "FILE_LOCKED", "message": str(e), "locked_by": getattr(e, 'locked_by_name', None)})
+    except FileItemNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except (StorageDomainError, VersionDomainError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{file_id}/unlock")
+def release_file_lock(
+    file_id: uuid.UUID,
+    payload: Optional[UnlockRequest] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Release check-out lock. Supports Admin force-unlock.
+    """
+    try:
+        force = payload.force if payload else False
+        VersionService.release_lock(
+            db=db,
+            org_id=current_user.organization_id,
+            file_id=file_id,
+            actor=current_user,
+            force=force,
+        )
+        return {"message": "Lock released successfully"}
+    except LicenseReadOnlyLockdownError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except LockPermissionDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except FileItemNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.get("/{file_id}/lock", response_model=Optional[FileLockInfo])
+def get_file_lock(
+    file_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Inspect active lock status and holder details on a file.
+    """
+    try:
+        return VersionService.get_lock_info(db, current_user.organization_id, file_id, current_user)
+    except FileItemNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))

@@ -17,6 +17,7 @@ from sqlalchemy import or_, func
 from app.core.config import settings
 from app.models.organization import Organization
 from app.models.file import FileItem, FileVersion, DriveType
+from app.models.lock import FileLock
 from app.models.user import User, UserRole
 from app.models.department import Department
 from app.models.audit import AuditLog, AuditAction
@@ -68,6 +69,14 @@ class FilePayloadMissingError(StorageDomainError):
 class SecurityViolationError(StorageDomainError):
     """Raised when an uploaded file violates enterprise malware or path traversal policies."""
     pass
+
+
+class FileLockedError(StorageDomainError):
+    """Raised when an operation is blocked because the file is locked by another user (HTTP 423)."""
+    def __init__(self, message: str, locked_by_name: str = "", expires_at: Optional[datetime] = None):
+        super().__init__(message)
+        self.locked_by_name = locked_by_name
+        self.expires_at = expires_at
 
 
 # =====================================================================
@@ -521,6 +530,27 @@ class StorageService:
         return breadcrumbs
 
     @classmethod
+    def _verify_lock_unlocked(cls, db: Session, item: FileItem, actor: User) -> None:
+        """Ensures file is not locked by another user before mutations."""
+        if item.is_folder:
+            return
+        lock = db.query(FileLock).filter(FileLock.file_id == item.id).first()
+        if not lock:
+            return
+        now = datetime.now(timezone.utc)
+        if lock.expires_at <= now:
+            db.delete(lock)
+            db.commit()
+            return
+        if lock.locked_by_id != actor.id and not actor.is_superuser:
+            holder_name = lock.locked_by.full_name if lock.locked_by else "Colleague"
+            raise FileLockedError(
+                f"ይህ ፋይል በ{holder_name} ተቆልፏል (File is locked by {holder_name})",
+                locked_by_name=holder_name,
+                expires_at=lock.expires_at,
+            )
+
+    @classmethod
     def move_item(
         cls,
         db: Session,
@@ -536,6 +566,7 @@ class StorageService:
         CapabilityService.verify_organization_write_access(db, org_id)
 
         item = cls.get_item(db, org_id, item_id, actor)
+        cls._verify_lock_unlocked(db, item, actor)
 
         if new_parent_id:
             if new_parent_id == item.id:
@@ -588,6 +619,7 @@ class StorageService:
         CapabilityService.verify_organization_write_access(db, org_id)
 
         item = cls.get_item(db, org_id, item_id, actor)
+        cls._verify_lock_unlocked(db, item, actor)
 
         if item.is_folder:
             clean_name = new_name.strip()
@@ -661,6 +693,7 @@ class StorageService:
         CapabilityService.verify_organization_write_access(db, org_id)
 
         root = cls.get_item(db, org_id, item_id, actor)
+        cls._verify_lock_unlocked(db, root, actor)
         now = datetime.now(timezone.utc)
 
         root.is_deleted = True
