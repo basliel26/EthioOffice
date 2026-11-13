@@ -36,14 +36,18 @@ class Organization(Base):
     storage_limit_bytes = Column(BigInteger, default=100 * 1024 * 1024 * 1024, nullable=False)  # Default 100 GB
     used_storage_bytes = Column(BigInteger, default=0, nullable=False)
     
+    # Enterprise Security: IP Whitelisting / Corporate LAN & VPN Subnet Fencing
+    allowed_ip_ranges = Column(String(512), nullable=True)  # Comma-separated CIDRs e.g. "10.0.0.0/8, 192.168.1.0/24"
+    
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
-    users = relationship("User", back_populates="organization", cascade="all, delete-orphan")
+    users = relationship("User", back_populates="organization", cascade="all, delete-orphan", foreign_keys="User.organization_id")
     departments = relationship("Department", back_populates="organization", cascade="all, delete-orphan")
     file_items = relationship("FileItem", back_populates="organization", cascade="all, delete-orphan")
     license = relationship("License", back_populates="organization", uselist=False, cascade="all, delete-orphan")
+    license_history = relationship("LicenseHistory", back_populates="organization", cascade="all, delete-orphan", order_by="desc(LicenseHistory.activated_at)")
     letter_records = relationship("LetterRegistry", back_populates="organization", cascade="all, delete-orphan")
     tags = relationship("Tag", back_populates="organization", cascade="all, delete-orphan")
 
@@ -53,13 +57,14 @@ class License(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), unique=True, nullable=False)
-    license_key = Column(String(1024), unique=True, nullable=False, index=True)
+    license_key = Column(String(2048), unique=True, nullable=False, index=True)
     tier = Column(Enum(LicenseTier, name="license_tier_enum"), default=LicenseTier.BUSINESS, nullable=False)
     
     max_users = Column(Integer, nullable=False)
     storage_limit_bytes = Column(BigInteger, nullable=False)
     features = Column(String(1024), nullable=True)  # Comma-separated list of granted capabilities
     grace_period_days = Column(Integer, default=14, nullable=False)
+    machine_fingerprint = Column(String(255), nullable=True)  # Hardware node-lock
     
     issued_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
@@ -67,3 +72,22 @@ class License(Base):
 
     # Relationships
     organization = relationship("Organization", back_populates="license")
+
+
+class LicenseHistory(Base):
+    __tablename__ = "license_history"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    license_key_masked = Column(String(100), nullable=False)
+    tier = Column(String(50), nullable=False)
+    max_users = Column(Integer, nullable=False)
+    storage_limit_bytes = Column(BigInteger, nullable=False)
+    activated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    activated_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    machine_fingerprint = Column(String(255), nullable=True)
+
+    # Relationships
+    organization = relationship("Organization", back_populates="license_history")
+    activated_by = relationship("User", foreign_keys=[activated_by_id])

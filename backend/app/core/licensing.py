@@ -8,11 +8,26 @@ import json
 import base64
 import hmac
 import hashlib
+import platform
+import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Tuple, Optional, List
 import enum
 
 from app.core.config import settings
+
+
+def get_server_hardware_fingerprint() -> str:
+    """
+    Computes a deterministic SHA-256 hardware node fingerprint for the local server.
+    Used for on-premise license hardware node-locking.
+    """
+    node_id = str(uuid.getnode())  # Physical NIC MAC address integer
+    hostname = platform.node().lower()
+    system = platform.system().lower()
+    raw = f"{system}:{hostname}:{node_id}:ethiooffice-node-seed"
+    fp_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24].upper()
+    return f"NODE-{fp_hash[:4]}-{fp_hash[4:8]}-{fp_hash[8:12]}-{fp_hash[12:16]}"
 
 
 class LicenseStatus(str, enum.Enum):
@@ -39,6 +54,7 @@ def generate_license_token(
     license_id: Optional[str] = None,
     issued_at: Optional[datetime] = None,
     grace_period_days: int = 14,
+    machine_fingerprint: Optional[str] = None,
     signing_secret: Optional[str] = None,
 ) -> str:
     """
@@ -68,6 +84,9 @@ def generate_license_token(
         "grace_period_days": int(grace_period_days),
     }
 
+    if machine_fingerprint:
+        payload["machine_fingerprint"] = machine_fingerprint.strip().upper()
+
     payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     payload_b64 = base64.urlsafe_b64encode(payload_json.encode("utf-8")).decode("utf-8").rstrip("=")
     
@@ -83,6 +102,8 @@ def generate_license_token(
 def verify_license_token(
     token: str,
     expected_org_slug: Optional[str] = None,
+    expected_machine_fingerprint: Optional[str] = None,
+    enforce_node_lock: bool = True,
     signing_secret: Optional[str] = None,
     allow_grace_period: bool = True,
 ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
@@ -136,6 +157,16 @@ def verify_license_token(
                 payload,
                 f"ይህ ፈቃድ ለ '{payload['organization_slug']}' የተሰጠ በመሆኑ ለ '{expected_org_slug}' አይሰራም "
                 f"(License was issued for '{payload['organization_slug']}', cannot be used for '{expected_org_slug}')"
+            )
+
+    # 4b. Hardware Node-Lock validation (prevent unauthorized VM cloning)
+    if payload.get("machine_fingerprint") and enforce_node_lock:
+        target_fp = expected_machine_fingerprint or get_server_hardware_fingerprint()
+        if payload["machine_fingerprint"].upper().strip() != target_fp.upper().strip():
+            return (
+                False,
+                payload,
+                f"የሰርቨር ሃርድዌር መለያ አልተዛመደም (Hardware Node-Lock violation: License is locked to machine '{payload['machine_fingerprint']}', current server is '{target_fp}')"
             )
 
     # 5. Temporal validity & clock-tampering detection

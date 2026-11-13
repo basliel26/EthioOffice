@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 import enum
-from sqlalchemy import Column, String, Boolean, BigInteger, DateTime, Enum, ForeignKey
+from sqlalchemy import Column, String, Boolean, BigInteger, Integer, DateTime, Enum, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -29,6 +29,10 @@ class User(Base):
     storage_quota_bytes = Column(BigInteger, nullable=True)  # Null = unlimited
     used_storage_bytes = Column(BigInteger, default=0, nullable=False)
     
+    # Enterprise Security: Account Lockout & Brute-Force Defense
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+    
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
@@ -47,3 +51,11 @@ class User(Base):
     @property
     def is_admin(self) -> bool:
         return self.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+    @property
+    def is_locked(self) -> bool:
+        if self.locked_until:
+            now = datetime.now(timezone.utc)
+            locked_dt = self.locked_until if self.locked_until.tzinfo else self.locked_until.replace(tzinfo=timezone.utc)
+            return now < locked_dt
+        return False

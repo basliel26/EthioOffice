@@ -9,7 +9,13 @@ from app.models.file import FileItem, DriveType
 from app.models.audit import AuditLog, AuditAction
 from app.core.security import get_password_hash
 from app.core.licensing import generate_license_token
-from app.services.capability_service import CapabilityService, Capability, DEFAULT_TIER_CAPABILITIES, FeatureNotLicensedError
+from app.services.capability_service import (
+    CapabilityService,
+    Capability,
+    DEFAULT_TIER_CAPABILITIES,
+    FeatureNotLicensedError,
+    LicenseReadOnlyLockdownError
+)
 from app.schemas.tenant import (
     OrganizationUpdate,
     DepartmentCreate,
@@ -103,6 +109,18 @@ class TenantService:
         if payload.status is not None:
             changes["status"] = {"old": str(org.status), "new": payload.status}
             org.status = OrganizationStatus(payload.status)
+        if payload.allowed_ip_ranges is not None:
+            if payload.allowed_ip_ranges.strip():
+                import ipaddress
+                for token in payload.allowed_ip_ranges.split(","):
+                    t = token.strip()
+                    if t:
+                        try:
+                            ipaddress.ip_network(t, strict=False)
+                        except ValueError:
+                            raise ValueError(f"ትክክለኛ ያልሆነ የኢንተርኔት አድራሻ (Invalid CIDR or IP: '{t}')")
+            changes["allowed_ip_ranges"] = {"old": org.allowed_ip_ranges, "new": payload.allowed_ip_ranges}
+            org.allowed_ip_ranges = payload.allowed_ip_ranges.strip() if payload.allowed_ip_ranges.strip() else None
 
         if changes:
             audit = AuditLog(
@@ -182,6 +200,9 @@ class TenantService:
         payload: DepartmentCreate,
         actor: User
     ) -> Department:
+        # Check license write access (lockdown check)
+        CapabilityService.verify_organization_write_access(db, org_id)
+
         # Check uniqueness within the organization
         existing = db.query(Department).filter(
             Department.organization_id == org_id,

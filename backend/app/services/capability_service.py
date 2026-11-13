@@ -11,6 +11,7 @@ from fastapi import HTTPException, status, Depends
 
 from app.core.database import get_db
 from app.api.deps import get_current_user
+from app.core.licensing import evaluate_license_lifecycle
 from app.models.organization import Organization, License, LicenseTier
 from app.models.user import User
 
@@ -56,6 +57,11 @@ class SeatLimitExceededError(Exception):
 
 class FeatureNotLicensedError(Exception):
     """Raised when an organization attempts to access an unlicensed feature."""
+    pass
+
+
+class LicenseReadOnlyLockdownError(Exception):
+    """Raised when an organization attempts write operations while in license expiry lockdown."""
     pass
 
 
@@ -121,6 +127,51 @@ class CapabilityService:
                 f"የተፈቀደው የተጠቃሚዎች ቁጥር (Seat Limit) ተሞልቷል። እባክዎ ፈቃድዎን ያሻሽሉ "
                 f"(Organization has reached its license seat limit: {active_count}/{max_seats} users occupied. Please upgrade your license.)"
             )
+
+    @classmethod
+    def verify_organization_write_access(cls, db: Session, org_id: uuid.UUID) -> None:
+        """
+        Enforces Read-Only lockdown if organization's license has expired past grace period.
+        """
+        lic = db.query(License).filter(License.organization_id == org_id).first()
+        if not lic:
+            return  # Default initial grace / trial
+        
+        lifecycle = evaluate_license_lifecycle(
+            expires_at=lic.expires_at,
+            grace_period_days=lic.grace_period_days or 14,
+            is_active=lic.is_active
+        )
+        if not lifecycle["is_usable"]:
+            raise LicenseReadOnlyLockdownError(
+                "የድርጅትዎ ፈቃድ አገልግሎት ጊዜው ሙሉ በሙሉ አልቋል። ስርዓቱ ለማንበብ ብቻ (Read-Only) የተወሰነ ነው፤ አዲስ ፋይሎችን ወይም ተጠቃሚዎችን መፍጠር አይቻልም። እባክዎ ፈቃድዎን ያድሱ። "
+                "(Your organization license has expired past the grace period. EthioOffice is running in Read-Only mode. Write operations are blocked until a renewal key is activated.)"
+            )
+
+
+def require_write_access():
+    """
+    FastAPI dependency factory enforcing write permissions (checks for license expiry lockdown).
+    """
+    def dependency(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        if not current_user.organization_id or current_user.is_superuser:
+            return
+
+        try:
+            CapabilityService.verify_organization_write_access(db, current_user.organization_id)
+        except LicenseReadOnlyLockdownError as e:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "LICENSE_LOCKDOWN_READ_ONLY",
+                    "message": str(e)
+                }
+            )
+
+    return dependency
 
 
 def require_capability(required_capability: Capability):

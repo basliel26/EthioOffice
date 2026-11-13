@@ -9,7 +9,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from sqlalchemy.orm import Session
 
-from app.models.organization import Organization, License, LicenseTier
+from app.models.organization import Organization, License, LicenseTier, LicenseHistory
 from app.models.user import User
 from app.models.audit import AuditLog, AuditAction
 from app.core.licensing import (
@@ -23,6 +23,7 @@ from app.schemas.licensing import (
     CurrentLicenseResponse,
     LicenseGenerateRequest,
     LicenseGeneratedResponse,
+    LicenseHistoryResponse,
 )
 
 
@@ -134,6 +135,7 @@ class LicensingService:
             grace_period_days=license_rec.grace_period_days or 14,
             grace_days_remaining=lifecycle["grace_days_remaining"],
             warning=lifecycle["warning"],
+            machine_fingerprint=license_rec.machine_fingerprint,
             capabilities=capabilities,
         )
 
@@ -191,6 +193,7 @@ class LicensingService:
                 storage_limit_bytes=storage_bytes,
                 features=features_str,
                 grace_period_days=grace_days,
+                machine_fingerprint=payload.get("machine_fingerprint"),
                 issued_at=issued_at,
                 expires_at=expires_at,
                 is_active=True,
@@ -203,6 +206,7 @@ class LicensingService:
             license_rec.storage_limit_bytes = storage_bytes
             license_rec.features = features_str
             license_rec.grace_period_days = grace_days
+            license_rec.machine_fingerprint = payload.get("machine_fingerprint")
             license_rec.issued_at = issued_at
             license_rec.expires_at = expires_at
             license_rec.is_active = True
@@ -210,6 +214,27 @@ class LicensingService:
         # Synchronize organization table limits immediately
         org.max_users = max_users
         org.storage_limit_bytes = storage_bytes
+
+        # Masked key for audit and history
+        masked_key = (
+            license_key[:12] + "..." + license_key[-6:]
+            if len(license_key) > 20
+            else "MASKED-KEY"
+        )
+
+        # Record immutable LicenseHistory entry
+        history_entry = LicenseHistory(
+            organization_id=org.id,
+            license_key_masked=masked_key,
+            tier=tier_str,
+            max_users=max_users,
+            storage_limit_bytes=storage_bytes,
+            activated_at=datetime.now(timezone.utc),
+            activated_by_id=actor.id,
+            expires_at=expires_at,
+            machine_fingerprint=payload.get("machine_fingerprint"),
+        )
+        db.add(history_entry)
 
         # Audit log activation
         audit = AuditLog(
@@ -260,6 +285,7 @@ class LicensingService:
             expires_at=expires_at,
             issued_at=now,
             grace_period_days=payload.grace_period_days,
+            machine_fingerprint=payload.machine_fingerprint,
         )
 
         return LicenseGeneratedResponse(
@@ -272,4 +298,32 @@ class LicensingService:
             issued_at=now,
             expires_at=expires_at,
             grace_period_days=payload.grace_period_days,
+            machine_fingerprint=payload.machine_fingerprint,
         )
+
+    @classmethod
+    def get_license_history(cls, db: Session, org_id: uuid.UUID) -> List[LicenseHistoryResponse]:
+        """
+        Retrieves complete chronological audit log of all license activations for this tenant.
+        """
+        entries = (
+            db.query(LicenseHistory)
+            .filter(LicenseHistory.organization_id == org_id)
+            .order_by(LicenseHistory.activated_at.desc())
+            .all()
+        )
+
+        return [
+            LicenseHistoryResponse(
+                id=e.id,
+                license_key_masked=e.license_key_masked,
+                tier=e.tier,
+                max_users=e.max_users,
+                storage_limit_gb=round(e.storage_limit_bytes / (1024 ** 3), 2),
+                activated_at=e.activated_at,
+                expires_at=e.expires_at,
+                activated_by_email=e.activated_by.email if e.activated_by else None,
+                machine_fingerprint=e.machine_fingerprint,
+            )
+            for e in entries
+        ]

@@ -10,7 +10,7 @@ from app.services.tenant_service import (
     DepartmentNotFoundError,
     CrossTenantAccessError,
 )
-from app.services.capability_service import FeatureNotLicensedError
+from app.services.capability_service import FeatureNotLicensedError, LicenseReadOnlyLockdownError
 from app.schemas.tenant import (
     DepartmentCreate,
     DepartmentResponse,
@@ -58,6 +58,8 @@ def create_department(
             leads=[],
             created_at=dept.created_at
         )
+    except LicenseReadOnlyLockdownError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
     except FeatureNotLicensedError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except DepartmentNotFoundError as e:

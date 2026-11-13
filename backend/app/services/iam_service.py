@@ -27,6 +27,14 @@ class TokenInvalidError(Exception):
     pass
 
 
+class AccountLockedError(Exception):
+    pass
+
+
+class IPAccessRestrictedError(Exception):
+    pass
+
+
 class IAMService:
     @staticmethod
     def validate_password_strength(password: str) -> None:
@@ -62,15 +70,82 @@ class IAMService:
         clean_email = email.lower().strip()
         user = db.query(User).filter(User.email == clean_email).first()
 
+        # Enterprise Brute-Force Defense: Check if account is temporarily locked
+        if user and user.is_locked:
+            now = datetime.now(timezone.utc)
+            locked_dt = user.locked_until if user.locked_until.tzinfo else user.locked_until.replace(tzinfo=timezone.utc)
+            remaining_secs = max(1, int((locked_dt - now).total_seconds()))
+            remaining_mins = max(1, (remaining_secs + 59) // 60)
+            raise AccountLockedError(
+                f"ተደጋጋሚ የተሳሳተ ሙከራ በማድረጉ ይህ አካውንት ለ{remaining_mins} ደቂቃዎች ታግዷል "
+                f"(Account temporarily locked due to 5 consecutive failed login attempts. Try again in {remaining_mins} minutes or contact your administrator)"
+            )
+
         # Timing attack mitigation: always execute bcrypt check even if user doesn't exist
         password_to_check = user.hashed_password if user else DUMMY_BCRYPT_HASH
         is_valid = verify_password(password, password_to_check)
 
         if not user or not is_valid:
+            if user:
+                user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+                if user.failed_login_attempts >= 5:
+                    user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
+                    audit = AuditLog(
+                        organization_id=user.organization_id,
+                        user_id=user.id,
+                        action=AuditAction.LOGIN,
+                        target_type="USER",
+                        target_id=user.id,
+                        target_name=user.full_name,
+                        ip_address=client_ip,
+                        details={"action": "ACCOUNT_LOCKED_BRUTE_FORCE", "failed_attempts": user.failed_login_attempts}
+                    )
+                    db.add(audit)
+                    db.commit()
+                    raise AccountLockedError(
+                        "የይለፍ ቃል 5 ጊዜ ተሳስቷል፤ አካውንቱ ለ15 ደቂቃዎች ታግዷል (Account locked for 15 minutes due to 5 consecutive failed login attempts)"
+                    )
+                else:
+                    attempts_left = 5 - user.failed_login_attempts
+                    db.commit()
+                    raise AuthenticationError(
+                        f"የተሳሳተ ኢሜይል ወይም የይለፍ ቃል ({attempts_left} ሙከራዎች ቀርተዋል) "
+                        f"(Incorrect email or password. {attempts_left} attempts remaining before account lockout)"
+                    )
             raise AuthenticationError("የተሳሳተ ኢሜይል ወይም የይለፍ ቃል (Incorrect email or password)")
 
         if not user.is_active:
             raise AuthenticationError("ይህ የተጠቃሚ አካውንት ተዘግቷል (User account is deactivated)")
+
+        # Enterprise Security: Corporate IP / CIDR Subnet Whitelist
+        if client_ip and hasattr(user.organization, "allowed_ip_ranges") and user.organization.allowed_ip_ranges:
+            import ipaddress
+            allowed_raw = [t.strip() for t in user.organization.allowed_ip_ranges.split(",") if t.strip()]
+            allowed_subnets = []
+            for item in allowed_raw:
+                try:
+                    allowed_subnets.append(ipaddress.ip_network(item, strict=False))
+                except ValueError:
+                    pass
+            
+            if allowed_subnets:
+                ip_to_check = "127.0.0.1" if client_ip.lower() == "testclient" else client_ip.strip()
+                try:
+                    ip_obj = ipaddress.ip_address(ip_to_check)
+                    is_ip_allowed = any(ip_obj in subnet for subnet in allowed_subnets)
+                    if not is_ip_allowed:
+                        raise IPAccessRestrictedError(
+                            f"ከዚህ የኢንተርኔት አድራሻ ({client_ip}) መግባት አልተፈቀደም (Login from IP '{client_ip}' is blocked. Access is restricted to authorized corporate subnets)"
+                        )
+                except ValueError:
+                    raise IPAccessRestrictedError(
+                        f"ትክክለኛ ያልሆነ የኢንተርኔት አድራሻ ({client_ip}) (Unparseable client IP '{client_ip}')"
+                    )
+
+        # Reset failed attempts on successful login
+        if user.failed_login_attempts > 0 or user.locked_until is not None:
+            user.failed_login_attempts = 0
+            user.locked_until = None
 
         # Enterprise Multi-Tenant Status Check: Verify organization is not suspended
         if hasattr(user.organization, "status") and str(user.organization.status.value if hasattr(user.organization.status, "value") else user.organization.status) == "SUSPENDED":
@@ -241,8 +316,9 @@ class IAMService:
         # Validate password strength
         cls.validate_password_strength(password)
 
-        # Enforce seat limits
+        # Enforce write access (license expiry lockdown) and seat limits
         from app.services.capability_service import CapabilityService
+        CapabilityService.verify_organization_write_access(db, org_id)
         CapabilityService.enforce_seat_limit(db, org_id)
 
         # Create user
@@ -272,3 +348,35 @@ class IAMService:
         db.commit()
         db.refresh(new_user)
         return new_user
+
+    @classmethod
+    def unlock_user_account(
+        cls,
+        db: Session,
+        org_id: uuid.UUID,
+        user_id: uuid.UUID,
+        actor: User
+    ) -> bool:
+        """
+        Manually unlocks an employee's account after lockout.
+        Restricted to Organization Administrators or Superusers.
+        """
+        user = db.query(User).filter(User.id == user_id, User.organization_id == org_id).first()
+        if not user:
+            raise AuthenticationError("ተጠቃሚው አልተገኘም (User not found)")
+
+        user.failed_login_attempts = 0
+        user.locked_until = None
+
+        audit = AuditLog(
+            organization_id=org_id,
+            user_id=actor.id,
+            action=AuditAction.LOGIN,
+            target_type="USER",
+            target_id=user.id,
+            target_name=user.full_name,
+            details={"action": "ACCOUNT_UNLOCKED_BY_ADMIN", "unlocked_user": user.email}
+        )
+        db.add(audit)
+        db.commit()
+        return True

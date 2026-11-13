@@ -22,6 +22,7 @@ class OrganizationUpdate(BaseModel):
     logo_url: Optional[str] = Field(None, max_length=512)
     theme_color: Optional[str] = Field(None, description="Hex color format e.g. #059669")
     status: Optional[str] = Field(None, description="TRIAL, ACTIVE, SUSPENDED, ARCHIVED")
+    allowed_ip_ranges: Optional[str] = Field(None, description="Comma-separated corporate CIDRs/IPs e.g. '10.0.0.0/8, 192.168.1.0/24'")
 
     @field_validator("tin_number")
     @classmethod
@@ -55,6 +56,7 @@ class OrganizationResponse(BaseModel):
     max_users: int
     storage_limit_bytes: int
     used_storage_bytes: int
+    allowed_ip_ranges: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

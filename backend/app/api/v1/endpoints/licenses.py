@@ -3,17 +3,19 @@ FastAPI Endpoints for Module 3: Licensing & Capability Engine
 """
 
 import uuid
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_admin
 from app.models.user import User, UserRole
 from app.schemas.licensing import (
     CurrentLicenseResponse,
     LicenseActivationRequest,
     LicenseGenerateRequest,
     LicenseGeneratedResponse,
+    LicenseHistoryResponse,
 )
 from app.services.licensing_service import (
     LicensingService,
@@ -84,6 +86,18 @@ def activate_license_key(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except LicenseNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/history", response_model=List[LicenseHistoryResponse])
+def get_license_activation_history(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """
+    Get immutable audit log of all past license activations and tier upgrades for the organization.
+    Requires ADMIN privileges.
+    """
+    return LicensingService.get_license_history(db, current_admin.organization_id)
 
 
 @router.post("/generate", response_model=LicenseGeneratedResponse)

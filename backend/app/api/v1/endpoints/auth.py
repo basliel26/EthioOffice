@@ -8,9 +8,12 @@ from app.services.iam_service import (
     IAMService, 
     AuthenticationError, 
     TokenInvalidError, 
-    PasswordValidationError
+    PasswordValidationError,
+    AccountLockedError,
+    IPAccessRestrictedError,
 )
-from app.services.capability_service import SeatLimitExceededError
+from app.core.licensing import evaluate_license_lifecycle, LicenseStatus
+from app.services.capability_service import SeatLimitExceededError, LicenseReadOnlyLockdownError
 from app.schemas.iam import (
     LoginRequest, 
     DualTokenResponse, 
@@ -34,7 +37,30 @@ def build_user_response(user: User) -> UserResponse:
         )
         for ud in user.departments
     ]
-    org_summary = OrganizationSummary.model_validate(user.organization)
+
+    org_dict = {
+        "id": user.organization.id,
+        "name": user.organization.name,
+        "slug": user.organization.slug,
+        "tin_number": user.organization.tin_number,
+        "logo_url": user.organization.logo_url,
+        "theme_color": user.organization.theme_color,
+        "allowed_ip_ranges": user.organization.allowed_ip_ranges,
+    }
+    if user.organization.license:
+        lic = user.organization.license
+        lifecycle = evaluate_license_lifecycle(
+            expires_at=lic.expires_at,
+            grace_period_days=lic.grace_period_days or 14,
+            is_active=lic.is_active
+        )
+        org_dict["license_tier"] = lic.tier.value if hasattr(lic.tier, "value") else str(lic.tier)
+        org_dict["license_status"] = lifecycle["status"].value if hasattr(lifecycle["status"], "value") else str(lifecycle["status"])
+        org_dict["days_remaining"] = lifecycle["days_remaining"]
+        org_dict["is_grace_period"] = lifecycle["status"] == LicenseStatus.IN_GRACE_PERIOD
+        org_dict["license_warning"] = lifecycle["warning"]
+
+    org_summary = OrganizationSummary(**org_dict)
     
     return UserResponse(
         id=user.id,
@@ -57,7 +83,11 @@ def login(
     """
     Authenticate employee, issue short-lived JWT access token and secure rotated refresh token.
     """
-    client_ip = request.client.host if request.client else None
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
 
     try:
@@ -67,6 +97,16 @@ def login(
             password=payload.password,
             client_ip=client_ip,
             user_agent=user_agent
+        )
+    except AccountLockedError as e:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail={"code": "ACCOUNT_LOCKED", "message": str(e)},
+        )
+    except IPAccessRestrictedError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "IP_ACCESS_DENIED", "message": str(e)},
         )
     except AuthenticationError as e:
         raise HTTPException(
@@ -92,7 +132,11 @@ def refresh_token(
     """
     Rotate refresh token and issue a fresh access token.
     """
-    client_ip = request.client.host if request.client else None
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
 
     try:
@@ -220,9 +264,33 @@ def create_organization_user(
             actor=current_admin,
         )
         return build_user_response(user)
+    except LicenseReadOnlyLockdownError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
     except SeatLimitExceededError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except AuthenticationError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except PasswordValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post("/users/{user_id}/unlock")
+def unlock_user_account(
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """
+    Manually unfreeze an employee account after brute-force lockout.
+    Requires ADMIN privileges.
+    """
+    try:
+        IAMService.unlock_user_account(
+            db=db,
+            org_id=current_admin.organization_id,
+            user_id=user_id,
+            actor=current_admin,
+        )
+        return {"message": "አካውንቱ በተሳካ ሁኔታ ተከፍቷል (Account successfully unlocked)"}
+    except AuthenticationError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

@@ -1,5 +1,5 @@
 from app.core.database import Base
-from app.models.organization import Organization, License, LicenseTier, OrganizationStatus
+from app.models.organization import Organization, License, LicenseTier, OrganizationStatus, LicenseHistory
 from app.models.user import User, UserRole
 from app.models.user_session import UserSession
 from app.models.department import Department, UserDepartment
@@ -18,6 +18,7 @@ __all__ = [
     "Organization",
     "OrganizationStatus",
     "License",
+    "LicenseHistory",
     "LicenseTier",
     "User",
     "UserRole",

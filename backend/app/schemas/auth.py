@@ -22,9 +22,17 @@ class OrganizationSummary(BaseModel):
     id: uuid.UUID
     name: str
     slug: str
-    tin_number: Optional[str]
-    logo_url: Optional[str]
+    tin_number: Optional[str] = None
+    logo_url: Optional[str] = None
     theme_color: str
+    allowed_ip_ranges: Optional[str] = None
+
+    # Real-time enterprise license status context
+    license_tier: Optional[str] = None
+    license_status: Optional[str] = None
+    days_remaining: Optional[int] = None
+    is_grace_period: Optional[bool] = False
+    license_warning: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

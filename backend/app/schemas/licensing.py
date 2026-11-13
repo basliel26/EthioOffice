@@ -20,6 +20,7 @@ class LicenseGenerateRequest(BaseModel):
     storage_limit_gb: int = Field(default=100, ge=1)
     valid_days: int = Field(default=365, ge=1)
     grace_period_days: int = Field(default=14, ge=0)
+    machine_fingerprint: Optional[str] = Field(None, description="Optional server node hardware fingerprint for node-locking")
     custom_features: Optional[List[str]] = None
 
 
@@ -33,6 +34,7 @@ class LicenseGeneratedResponse(BaseModel):
     issued_at: datetime
     expires_at: datetime
     grace_period_days: int
+    machine_fingerprint: Optional[str] = None
 
 
 class CurrentLicenseResponse(BaseModel):
@@ -58,7 +60,22 @@ class CurrentLicenseResponse(BaseModel):
     grace_period_days: int
     grace_days_remaining: int
     warning: Optional[str]
+    machine_fingerprint: Optional[str] = None
     
     capabilities: List[str]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LicenseHistoryResponse(BaseModel):
+    id: uuid.UUID
+    license_key_masked: str
+    tier: str
+    max_users: int
+    storage_limit_gb: float
+    activated_at: datetime
+    expires_at: datetime
+    activated_by_email: Optional[str] = None
+    machine_fingerprint: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

@@ -61,6 +61,8 @@ def get_organization_profile(
     try:
         org = TenantService.get_organization(db, current_user.organization_id)
         return org
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except TenantNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -83,6 +85,8 @@ def update_organization_profile(
             actor=current_admin
         )
         return org
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except TenantNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
