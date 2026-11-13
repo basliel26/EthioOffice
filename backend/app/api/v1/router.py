@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, files, letters, calendar, organizations, departments, licenses
+from app.api.v1.endpoints import auth, files, letters, calendar, organizations, departments, licenses, shares, public
 
 api_router = APIRouter()
 
@@ -20,5 +20,7 @@ api_router.include_router(organizations.router, prefix="/organizations", tags=["
 api_router.include_router(departments.router, prefix="/departments", tags=["Module 2: Departments & Hierarchies"])
 api_router.include_router(licenses.router, prefix="/licenses", tags=["Module 3: Licensing & Capability Engine"])
 api_router.include_router(files.router, prefix="/files", tags=["Module 4: File & Drive Management"])
+api_router.include_router(shares.router, prefix="/shares", tags=["Module 6: Access Control & Sharing"])
+api_router.include_router(public.router, prefix="/public", tags=["Module 6: Public Share Links"])
 api_router.include_router(letters.router, prefix="/letters", tags=["Module 9: Official Letter Registry (የደብዳቤ መዝገብ)"])
 api_router.include_router(calendar.router, prefix="/calendar", tags=["Module 8: Ethiopian Calendar (ባሕረ ሐሳብ)"])

@@ -277,10 +277,20 @@ class StorageService:
         if not item:
             raise FileItemNotFoundError("ፋይሉ ወይም ፎልደሩ አልተገኘም (File or folder not found)")
 
-        # Personal Drive Access Verification
+        # Access Verification (Ownership, Department, or Shared Access)
         if item.drive_type == DriveType.PERSONAL:
-            if item.owner_id != user.id and not user.is_superuser:
-                raise DriveAccessDeniedError("የግል ድራይቭ ፋይልን የማየት ፈቃድ የለዎትም (Access denied: Personal drive item belongs to another user)")
+            if item.owner_id != user.id and not user.is_superuser and not user.is_admin:
+                from app.services.share_service import ShareService
+                perm = ShareService.resolve_effective_permission(db, item, user)
+                if not perm:
+                    raise DriveAccessDeniedError("የግል ድራይቭ ፋይልን የማየት ፈቃድ የለዎትም (Access denied: Personal drive item belongs to another user)")
+        elif item.drive_type == DriveType.COMPANY:
+            user_dept_ids = {ud.department_id for ud in user.departments}
+            if item.department_id and item.department_id not in user_dept_ids and not (user.is_admin or user.is_superuser):
+                from app.services.share_service import ShareService
+                perm = ShareService.resolve_effective_permission(db, item, user)
+                if not perm:
+                    raise DriveAccessDeniedError("የዚህ ክፍል ፋይልን የማየት ፈቃድ የለዎትም (Access denied: File belongs to another department)")
 
         return item
 
@@ -568,11 +578,20 @@ class StorageService:
         item = cls.get_item(db, org_id, item_id, actor)
         cls._verify_lock_unlocked(db, item, actor)
 
+        from app.services.share_service import ShareService
+        from app.models.share import SharePermission
+        effective = ShareService.resolve_effective_permission(db, item, actor)
+        if effective != SharePermission.EDITOR:
+            raise DriveAccessDeniedError("ፋይሉን ወይም ፎልደሩን የማዛወር ፈቃድ የለዎትም (Read-only access: Editor permission required to move)")
+
         if new_parent_id:
             if new_parent_id == item.id:
                 raise FolderCycleError("አቃፊን ወደ ራሱ ማንቀሳቀስ አይቻልም (Cannot move a folder into itself)")
 
             new_parent = cls.get_item(db, org_id, new_parent_id, actor)
+            dest_perm = ShareService.resolve_effective_permission(db, new_parent, actor)
+            if dest_perm != SharePermission.EDITOR:
+                raise DriveAccessDeniedError("ወደ ተመረጠው ፎልደር ፋይል የማዛወር ፈቃድ የለዎትም (Editor permission required in destination folder)")
             if not new_parent.is_folder:
                 raise StorageDomainError("የተመረጠው ወላጅ አቃፊ (Parent) ፎልደር አይደለም")
 
@@ -620,6 +639,12 @@ class StorageService:
 
         item = cls.get_item(db, org_id, item_id, actor)
         cls._verify_lock_unlocked(db, item, actor)
+
+        from app.services.share_service import ShareService
+        from app.models.share import SharePermission
+        effective = ShareService.resolve_effective_permission(db, item, actor)
+        if effective != SharePermission.EDITOR:
+            raise DriveAccessDeniedError("ፋይሉን ወይም ፎልደሩን የመቀየር ፈቃድ የለዎትም (Read-only access: Editor permission required to rename)")
 
         if item.is_folder:
             clean_name = new_name.strip()
@@ -694,6 +719,13 @@ class StorageService:
 
         root = cls.get_item(db, org_id, item_id, actor)
         cls._verify_lock_unlocked(db, root, actor)
+
+        from app.services.share_service import ShareService
+        from app.models.share import SharePermission
+        effective = ShareService.resolve_effective_permission(db, root, actor)
+        if effective != SharePermission.EDITOR:
+            raise DriveAccessDeniedError("ፋይሉን የመሰረዝ ፈቃድ የለዎትም (Read-only access: Editor permission required to delete)")
+
         now = datetime.now(timezone.utc)
 
         root.is_deleted = True

@@ -83,6 +83,18 @@ def list_files(
     )
 
 
+@router.get("/shared-with-me", response_model=List[FileItemResponse])
+def list_files_shared_with_me(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List all documents and folders shared with the user directly or via department branches.
+    """
+    from app.services.share_service import ShareService
+    return ShareService.list_shared_with_me(db, current_user.organization_id, current_user)
+
+
 @router.post("/folder", response_model=FileItemResponse, status_code=status.HTTP_201_CREATED)
 def create_folder(
     payload: FolderCreate,

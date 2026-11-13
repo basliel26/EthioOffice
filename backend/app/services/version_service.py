@@ -133,6 +133,13 @@ class VersionService:
         if file_item.is_folder:
             raise VersionDomainError("አቃፊዎችን መቆለፍ አይቻልም (Folders cannot be locked)")
 
+        # Verify Share Permission (Must be Editor, Owner, or Admin to lock)
+        from app.services.share_service import ShareService
+        from app.models.share import SharePermission
+        effective = ShareService.resolve_effective_permission(db, file_item, actor)
+        if effective != SharePermission.EDITOR:
+            raise DriveAccessDeniedError("ፋይሉን የመቆለፍ ፈቃድ የለዎትም (Read-only access: Editor permission required to checkout)")
+
         now = datetime.now(timezone.utc)
         capped_minutes = min(max(duration_minutes, 1), 1440)  # Max 24 hours
         expires_at = now + timedelta(minutes=capped_minutes)
@@ -277,6 +284,13 @@ class VersionService:
         file_item = StorageService.get_item(db, org_id, file_id, actor)
         if file_item.is_folder:
             raise VersionDomainError("አቃፊዎችን ማሻሻል አይቻልም (Folders cannot have versions)")
+
+        # Verify Share Permission (Must be Editor, Owner, or Admin to upload versions)
+        from app.services.share_service import ShareService
+        from app.models.share import SharePermission
+        effective = ShareService.resolve_effective_permission(db, file_item, actor)
+        if effective != SharePermission.EDITOR:
+            raise DriveAccessDeniedError("ፋይሉን የማሻሻል ፈቃድ የለዎትም (Read-only access: Editor permission required)")
 
         # Verify Lock Concurrency
         cls.verify_write_lock(db, file_item, actor)
@@ -436,6 +450,13 @@ class VersionService:
         file_item = StorageService.get_item(db, org_id, file_id, actor)
         if file_item.is_folder:
             raise VersionDomainError("Folders cannot be reverted")
+
+        # Verify Share Permission (Must be Editor, Owner, or Admin to revert)
+        from app.services.share_service import ShareService
+        from app.models.share import SharePermission
+        effective = ShareService.resolve_effective_permission(db, file_item, actor)
+        if effective != SharePermission.EDITOR:
+            raise DriveAccessDeniedError("ፋይሉን ወደ ቀድሞ ሁኔታ የመመለስ ፈቃድ የለዎትም (Read-only access: Editor permission required)")
 
         # Verify Lock Concurrency
         cls.verify_write_lock(db, file_item, actor)
