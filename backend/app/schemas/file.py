@@ -1,14 +1,30 @@
 import uuid
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class BreadcrumbItem(BaseModel):
+    id: uuid.UUID
+    name: str
+    is_folder: bool
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FolderCreate(BaseModel):
-    name: str
+    name: str = Field(..., min_length=1, max_length=255)
     parent_id: Optional[uuid.UUID] = None
     department_id: Optional[uuid.UUID] = None
     drive_type: str = "PERSONAL"  # 'PERSONAL' or 'COMPANY'
+
+
+class FileMoveRequest(BaseModel):
+    new_parent_id: Optional[uuid.UUID] = None
+
+
+class FileRenameRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
 
 
 class FileLockInfo(BaseModel):
@@ -43,6 +59,9 @@ class FileItemResponse(BaseModel):
     is_deleted: bool
     is_locked: bool = False
     lock_info: Optional[FileLockInfo] = None
+    subfolder_count: Optional[int] = 0
+    file_count: Optional[int] = 0
+    breadcrumbs: Optional[List[BreadcrumbItem]] = None
     created_at: datetime
     updated_at: datetime
     ec_created_at: Optional[str] = None

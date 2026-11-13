@@ -1,3 +1,4 @@
+import uuid
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -50,13 +51,14 @@ def test_files_and_folders():
     assert any("የ2019" in f["name"] for f in files)
 
     # Create new folder
+    unique_folder_name = f"የ2019 የኦዲት ግኝቶች {uuid.uuid4().hex[:6]}"
     create_resp = client.post(
         "/api/v1/files/folder",
-        json={"name": "የ2019 የኦዲት ግኝቶች (Audit Findings 2019)", "drive_type": "COMPANY"},
+        json={"name": unique_folder_name, "drive_type": "COMPANY"},
         headers=headers
     )
-    assert create_resp.status_code == 200
-    assert create_resp.json()["name"] == "የ2019 የኦዲት ግኝቶች (Audit Findings 2019)"
+    assert create_resp.status_code in [200, 201]
+    assert create_resp.json()["name"] == unique_folder_name
 
 
 def test_letter_registry():

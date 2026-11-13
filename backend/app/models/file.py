@@ -50,6 +50,15 @@ class FileItem(Base):
     search_index = relationship("FileSearchIndex", back_populates="file_item", uselist=False, cascade="all, delete-orphan")
     tags = relationship("FileTag", back_populates="file_item", cascade="all, delete-orphan")
 
+    @property
+    def current_version(self):
+        if not self.versions:
+            return None
+        for v in self.versions:
+            if v.id == self.current_version_id:
+                return v
+        return self.versions[0]
+
 
 class FileVersion(Base):
     __tablename__ = "file_versions"
