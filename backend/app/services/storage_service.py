@@ -515,6 +515,13 @@ class StorageService:
         db.commit()
         db.refresh(file_item)
 
+        # Trigger Module 10 Search Engine Indexing
+        try:
+            from app.services.search_service import SearchService
+            SearchService.index_file(db, file_item.id)
+        except Exception:
+            pass
+
         return cls.to_file_response(db, file_item)
 
     @classmethod
@@ -680,6 +687,14 @@ class StorageService:
         db.add(audit)
         db.commit()
         db.refresh(item)
+
+        # Update Module 10 Search Engine Index on file rename
+        if not item.is_folder:
+            try:
+                from app.services.search_service import SearchService
+                SearchService.index_file(db, item.id)
+            except Exception:
+                pass
 
         return cls.to_file_response(db, item)
 

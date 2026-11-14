@@ -379,6 +379,13 @@ class VersionService:
         db.commit()
         db.refresh(file_item)
 
+        # Trigger Module 10 Search Engine Indexing
+        try:
+            from app.services.search_service import SearchService
+            SearchService.index_file(db, file_item.id, force=True)
+        except Exception:
+            pass
+
         return StorageService.to_file_response(db, file_item)
 
     @classmethod
@@ -506,5 +513,12 @@ class VersionService:
         db.add(audit)
         db.commit()
         db.refresh(file_item)
+
+        # Trigger Module 10 Search Engine Indexing
+        try:
+            from app.services.search_service import SearchService
+            SearchService.index_file(db, file_item.id, force=True)
+        except Exception:
+            pass
 
         return StorageService.to_file_response(db, file_item)

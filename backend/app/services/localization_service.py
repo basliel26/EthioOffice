@@ -87,18 +87,22 @@ GEEZ_DIGIT_MAP = {
 
 # Amharic Phonetic Homophone Normalization Mapping
 AMHARIC_HOMOPHONE_MAP = {
-    # Ha family -> ሀ
-    'ሐ': 'ሀ', 'ኀ': 'ሀ',
+    # Ha family -> ሀ (Collapses 1st and 4th order glottal/pharyngeal homophones)
+    'ሐ': 'ሀ', 'ኀ': 'ሀ', 'ሃ': 'ሀ', 'ሓ': 'ሀ', 'ኃ': 'ሀ',
     'ሑ': 'ሁ', 'ኁ': 'ሁ',
     'ሒ': 'ሂ', 'ኂ': 'ሂ',
-    'ሓ': 'ሃ', 'ኃ': 'ሃ',
     'ሔ': 'ሄ', 'ኄ': 'ሄ',
     'ሕ': 'ህ', 'ኅ': 'ህ',
     'ሖ': 'ሆ', 'ኆ': 'ሆ',
     # Se family -> ሰ
     'ሠ': 'ሰ', 'ሡ': 'ሱ', 'ሢ': 'ሲ', 'ሣ': 'ሳ', 'ሤ': 'ሴ', 'ሥ': 'ስ', 'ሦ': 'ሶ',
-    # A family -> አ
-    'ዐ': 'አ', 'ዑ': 'ኡ', 'ዒ': 'ኢ', 'ዓ': 'ኣ', 'ዔ': 'ኤ', 'ዕ': 'እ', 'ዖ': 'ኦ',
+    # A family -> አ (Collapses 1st and 4th order glottal stop homophones)
+    'ዐ': 'አ', 'ዓ': 'አ', 'ኣ': 'አ',
+    'ዑ': 'ኡ',
+    'ዒ': 'ኢ',
+    'ዔ': 'ኤ',
+    'ዕ': 'እ',
+    'ዖ': 'ኦ',
     # Tse family -> ጸ
     'ፀ': 'ጸ', 'ፁ': 'ጹ', 'ፂ': 'ጺ', 'ፃ': 'ጻ', 'ፄ': 'ጼ', 'ፅ': 'ጽ', 'ፆ': 'ጾ',
 }

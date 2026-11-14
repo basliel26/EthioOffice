@@ -11,6 +11,7 @@ from app.api.v1.endpoints import (
     public,
     euro_office,
     localization,
+    search,
 )
 
 api_router = APIRouter()
@@ -38,3 +39,4 @@ api_router.include_router(euro_office.router, prefix="/euro-office", tags=["Modu
 api_router.include_router(localization.router, prefix="/localization", tags=["Module 8: Ethiopian Localization Engine (ባሕረ ሐሳብ)"])
 api_router.include_router(calendar.router, prefix="/calendar", tags=["Module 8: Ethiopian Calendar (ባሕረ ሐሳብ)"])
 api_router.include_router(letters.router, prefix="/letters", tags=["Module 9: Official Letter Registry (የደብዳቤ መዝገብ)"])
+api_router.include_router(search.router, prefix="/search", tags=["Module 10: Full-Text Search & Metadata Indexing Engine"])
