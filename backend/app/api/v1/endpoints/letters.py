@@ -1,92 +1,78 @@
 import uuid
-from datetime import date
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, ConfigDict
+
 from app.core.database import get_db
 from app.api.deps import get_current_user
-from app.core.ethiopian_calendar import format_ethiopian_date, gregorian_to_ethiopian
 from app.models.user import User
-from app.models.letter import LetterRegistry, LetterDirection, LetterStatus
-from app.models.audit import AuditLog, AuditAction
+from app.models.letter import (
+    LetterDirection,
+    LetterStatus,
+    LetterConfidentiality,
+    LetterUrgency,
+)
+from app.schemas.letter import (
+    LetterCreate,
+    LetterUpdate,
+    LetterResponse,
+    LetterDetailResponse,
+    LetterRoutingCreate,
+    LetterRoutingComplete,
+    LetterRoutingResponse,
+    LetterApprovalRequest,
+    LetterDispatchRequest,
+    LetterAnalyticsSummary,
+)
+from app.services.letter_service import LetterService
 from app.services.capability_service import require_capability, Capability
 
 router = APIRouter(dependencies=[Depends(require_capability(Capability.LETTER_REGISTRY))])
 
 
-class LetterCreate(BaseModel):
-    reference_number: str
-    direction: str  # 'INWARD' or 'OUTWARD'
-    subject: str
-    sender_entity: str
-    recipient_entity: str
-    attachment_file_id: Optional[uuid.UUID] = None
-    notes: Optional[str] = None
-    assigned_to_id: Optional[uuid.UUID] = None
-
-
-class LetterResponse(BaseModel):
-    id: uuid.UUID
-    reference_number: str
-    direction: str
-    status: str
-    subject: str
-    sender_entity: str
-    recipient_entity: str
-    date_ec: str
-    date_gc: date
-    attachment_file_id: Optional[uuid.UUID]
-    notes: Optional[str]
-    created_at: str
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-@router.get("", response_model=List[LetterResponse])
-def list_letters(
-    direction: Optional[str] = Query(None, pattern="^(INWARD|OUTWARD)$"),
-    status: Optional[str] = Query(None),
-    search: Optional[str] = Query(None),
+@router.get("/analytics/summary", response_model=LetterAnalyticsSummary)
+def get_letter_analytics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    List and search official corporate letter registry records.
+    Get executive-level metrics and SLA status for the organization's official letter registry.
     """
-    query = db.query(LetterRegistry).filter(LetterRegistry.organization_id == current_user.organization_id)
+    return LetterService.get_analytics_summary(db=db, user=current_user)
 
-    if direction:
-        query = query.filter(LetterRegistry.direction == LetterDirection(direction))
-    if status:
-        query = query.filter(LetterRegistry.status == LetterStatus(status))
-    if search:
-        search_filter = f"%{search.strip()}%"
-        query = query.filter(
-            (LetterRegistry.reference_number.ilike(search_filter)) |
-            (LetterRegistry.subject.ilike(search_filter)) |
-            (LetterRegistry.sender_entity.ilike(search_filter)) |
-            (LetterRegistry.recipient_entity.ilike(search_filter))
-        )
 
-    letters = query.order_by(LetterRegistry.created_at.desc()).all()
-    return [
-        LetterResponse(
-            id=l.id,
-            reference_number=l.reference_number,
-            direction=l.direction.value,
-            status=l.status.value,
-            subject=l.subject,
-            sender_entity=l.sender_entity,
-            recipient_entity=l.recipient_entity,
-            date_ec=l.date_ec,
-            date_gc=l.date_gc,
-            attachment_file_id=l.attachment_file_id,
-            notes=l.notes,
-            created_at=l.created_at.isoformat(),
-        )
-        for l in letters
-    ]
+@router.get("", response_model=List[LetterResponse])
+def list_letters(
+    direction: Optional[LetterDirection] = Query(None, description="Filter by direction: INWARD, OUTWARD, INTERNAL_MEMO"),
+    status: Optional[LetterStatus] = Query(None, description="Filter by status"),
+    confidentiality: Optional[LetterConfidentiality] = Query(None, description="Filter by security classification"),
+    urgency: Optional[LetterUrgency] = Query(None, description="Filter by urgency level"),
+    department_id: Optional[uuid.UUID] = Query(None, description="Filter by issuing/owning department"),
+    ethiopian_year: Optional[int] = Query(None, description="Filter by Ethiopian fiscal year (e.g. 2018)"),
+    search: Optional[str] = Query(None, description="Search by ref number, subject, sender, or recipient (Amharic normalized)"),
+    is_overdue: Optional[bool] = Query(None, description="Filter letters breaching Ethiopian working day SLA"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List and search official corporate letter registry records with RBAC security clearance.
+    """
+    return LetterService.list_letters(
+        db=db,
+        user=current_user,
+        direction=direction,
+        status_filter=status,
+        confidentiality=confidentiality,
+        urgency=urgency,
+        department_id=department_id,
+        ethiopian_year=ethiopian_year,
+        search=search,
+        is_overdue=is_overdue,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("", response_model=LetterResponse)
@@ -96,53 +82,167 @@ def create_letter(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Register an official inward or outward company letter with automatic Ethiopian Calendar synchronization.
+    Register an official inward, outward, or internal letter with atomic sequence numbering and Ethiopian Calendar SLA.
     """
-    today = date.today()
-    ec_date = format_ethiopian_date(today)
+    letter = LetterService.register_letter(db=db, user=current_user, payload=payload)
+    detail = LetterService.get_letter_detail(db=db, user=current_user, letter_id=letter.id)
+    return detail
 
-    letter = LetterRegistry(
-        organization_id=current_user.organization_id,
-        reference_number=payload.reference_number.strip(),
-        direction=LetterDirection(payload.direction.upper()),
-        status=LetterStatus.RECEIVED if payload.direction.upper() == "INWARD" else LetterStatus.DRAFT,
-        subject=payload.subject.strip(),
-        sender_entity=payload.sender_entity.strip(),
-        recipient_entity=payload.recipient_entity.strip(),
-        date_ec=ec_date,
-        date_gc=today,
-        attachment_file_id=payload.attachment_file_id,
-        notes=payload.notes,
-        created_by_id=current_user.id,
-        assigned_to_id=payload.assigned_to_id or current_user.id,
-    )
-    db.add(letter)
-    db.flush()
 
-    audit = AuditLog(
-        organization_id=current_user.organization_id,
-        user_id=current_user.id,
-        action=AuditAction.LETTER_REGISTER,
-        target_type="LETTER",
-        target_id=letter.id,
-        target_name=letter.reference_number,
-        details={"subject": letter.subject, "direction": letter.direction.value}
-    )
-    db.add(audit)
-    db.commit()
-    db.refresh(letter)
+@router.get("/{id}", response_model=LetterDetailResponse)
+def get_letter_detail(
+    id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Retrieve full letter details, including departmental routing history and attachment metadata.
+    """
+    return LetterService.get_letter_detail(db=db, user=current_user, letter_id=id)
 
-    return LetterResponse(
-        id=letter.id,
-        reference_number=letter.reference_number,
-        direction=letter.direction.value,
-        status=letter.status.value,
-        subject=letter.subject,
-        sender_entity=letter.sender_entity,
-        recipient_entity=letter.recipient_entity,
-        date_ec=letter.date_ec,
-        date_gc=letter.date_gc,
-        attachment_file_id=letter.attachment_file_id,
-        notes=letter.notes,
-        created_at=letter.created_at.isoformat(),
+
+@router.patch("/{id}", response_model=LetterResponse)
+def update_letter(
+    id: uuid.UUID,
+    payload: LetterUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Update editable fields of an open or draft letter.
+    """
+    letter = LetterService.update_letter(db=db, user=current_user, letter_id=id, payload=payload)
+    return LetterService.get_letter_detail(db=db, user=current_user, letter_id=letter.id)
+
+
+@router.post("/{id}/submit", response_model=LetterResponse)
+def submit_letter_for_approval(
+    id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Submit an outward draft letter for manager/administrator approval.
+    """
+    letter = LetterService.submit_for_approval(db=db, user=current_user, letter_id=id)
+    return LetterService.get_letter_detail(db=db, user=current_user, letter_id=letter.id)
+
+
+@router.post("/{id}/approve", response_model=LetterResponse)
+def approve_letter(
+    id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Approve an outward letter draft. Requires Organization Admin or Department Lead privilege.
+    """
+    letter = LetterService.approve_letter(db=db, user=current_user, letter_id=id)
+    return LetterService.get_letter_detail(db=db, user=current_user, letter_id=letter.id)
+
+
+@router.post("/{id}/reject", response_model=LetterResponse)
+def reject_letter(
+    id: uuid.UUID,
+    payload: LetterApprovalRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Reject an outward letter draft with reviewer feedback.
+    """
+    letter = LetterService.reject_letter(
+        db=db,
+        user=current_user,
+        letter_id=id,
+        reason=payload.rejection_reason or "Changes requested",
     )
+    return LetterService.get_letter_detail(db=db, user=current_user, letter_id=letter.id)
+
+
+@router.post("/{id}/dispatch", response_model=LetterResponse)
+def dispatch_letter(
+    id: uuid.UUID,
+    payload: LetterDispatchRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Mark an approved outward letter as dispatched, recording dispatch date and delivery method.
+    """
+    letter = LetterService.dispatch_letter(
+        db=db,
+        user=current_user,
+        letter_id=id,
+        delivery_method=payload.delivery_method or LetterUrgency.NORMAL,
+        dispatched_date_gc=payload.dispatched_date_gc,
+    )
+    return LetterService.get_letter_detail(db=db, user=current_user, letter_id=letter.id)
+
+
+@router.post("/{id}/route", response_model=LetterRoutingResponse)
+def route_letter(
+    id: uuid.UUID,
+    payload: LetterRoutingCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Transfer/forward a letter to another department with chain-of-custody instructions.
+    """
+    routing = LetterService.route_letter(db=db, user=current_user, letter_id=id, payload=payload)
+    detail = LetterService.get_letter_detail(db=db, user=current_user, letter_id=id)
+    # Find the created routing in detail.routings
+    created = next((r for r in detail.routings if r.id == routing.id), None)
+    if not created:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load created routing")
+    return created
+
+
+@router.patch("/routings/{routing_id}/acknowledge", response_model=LetterRoutingResponse)
+def acknowledge_letter_routing(
+    routing_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Acknowledge receipt of a routed letter by the destination department officer.
+    """
+    routing = LetterService.acknowledge_routing(db=db, user=current_user, routing_id=routing_id)
+    detail = LetterService.get_letter_detail(db=db, user=current_user, letter_id=routing.letter_id)
+    updated = next((r for r in detail.routings if r.id == routing.id), None)
+    return updated
+
+
+@router.patch("/routings/{routing_id}/complete", response_model=LetterRoutingResponse)
+def complete_letter_routing(
+    routing_id: uuid.UUID,
+    payload: LetterRoutingComplete,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Mark a letter routing task as completed with resolution notes.
+    """
+    routing = LetterService.complete_routing(
+        db=db,
+        user=current_user,
+        routing_id=routing_id,
+        response_notes=payload.response_notes,
+    )
+    detail = LetterService.get_letter_detail(db=db, user=current_user, letter_id=routing.letter_id)
+    updated = next((r for r in detail.routings if r.id == routing.id), None)
+    return updated
+
+
+@router.post("/{id}/archive", response_model=LetterResponse)
+def archive_letter(
+    id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Archive a letter in the registry.
+    """
+    letter = LetterService.archive_letter(db=db, user=current_user, letter_id=id)
+    return LetterService.get_letter_detail(db=db, user=current_user, letter_id=letter.id)
