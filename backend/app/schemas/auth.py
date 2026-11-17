@@ -41,13 +41,36 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
     full_name: str
+    phone_number: Optional[str] = None
     role: str
+    is_active: bool = True
+    is_locked: bool = False
     avatar_url: Optional[str]
     organization: OrganizationSummary
     departments: List[DepartmentSummary]
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProfileUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class AdminResetPasswordRequest(BaseModel):
+    new_password: str
+
+
+class UserLockRequest(BaseModel):
+    lock_duration_hours: Optional[int] = None
+    reason: Optional[str] = None
 
 
 class Token(BaseModel):

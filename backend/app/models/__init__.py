@@ -12,6 +12,9 @@ from app.models.search import FileSearchIndex
 from app.models.letter import LetterRegistry, LetterDirection, LetterStatus
 from app.models.tag import Tag, FileTag
 from app.models.share_link import ShareLink, LinkAccessType
+from app.models.favorite import UserFavorite
+from app.models.notification import Notification
+from app.models.letter_attachment import LetterAttachment
 
 __all__ = [
     "Base",
@@ -42,4 +45,7 @@ __all__ = [
     "FileTag",
     "ShareLink",
     "LinkAccessType",
+    "UserFavorite",
+    "Notification",
+    "LetterAttachment",
 ]

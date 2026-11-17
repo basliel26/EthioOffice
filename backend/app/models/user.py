@@ -23,6 +23,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=False)
+    phone_number = Column(String(50), nullable=True)
     role = Column(Enum(UserRole, name="user_role_enum"), default=UserRole.STAFF, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     avatar_url = Column(String(512), nullable=True)

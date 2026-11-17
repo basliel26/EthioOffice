@@ -34,6 +34,15 @@ from app.schemas.file import (
     LockRequest,
     UnlockRequest,
     RevertVersionRequest,
+    RecentFileItemResponse,
+    EmptyTrashResponse,
+)
+from app.schemas.tag import TagResponse, FileTagAssignRequest, FileTagResponse
+from app.services.tag_service import (
+    TagService,
+    TagDomainError,
+    TagNotFoundError,
+    TagConflictError,
 )
 from app.services.storage_service import (
     StorageService,
@@ -220,6 +229,49 @@ def batch_delete_items(
     except LicenseReadOnlyLockdownError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
 
+
+@router.get("/starred", response_model=List[FileItemResponse])
+def list_starred_items(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List all documents and folders marked as favorite / starred by the user.
+    """
+    return StorageService.list_starred_items(db, current_user.organization_id, current_user)
+
+
+@router.get("/recent", response_model=List[RecentFileItemResponse])
+def get_recent_files(
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Enterprise Recent Documents Feed showing the latest documents opened, edited, or interacted with.
+    """
+    return StorageService.get_recent_items(db, current_user.organization_id, current_user, limit=limit)
+
+
+@router.post("/trash/empty", response_model=EmptyTrashResponse)
+def empty_trash(
+    drive_type: Optional[str] = Query(None, description="Optional filter: PERSONAL or COMPANY"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Permanently empties the recycle bin, freeing storage quota atomically.
+    Admins can purge tenant-wide trash; regular staff purge their personal trash.
+    """
+    try:
+        return StorageService.empty_trash(
+            db=db,
+            org_id=current_user.organization_id,
+            actor=current_user,
+            drive_type=drive_type,
+        )
+    except LicenseReadOnlyLockdownError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
 
 
 @router.get("/{file_id}/download")
@@ -645,6 +697,123 @@ def get_file_lock(
     """
     try:
         return VersionService.get_lock_info(db, current_user.organization_id, file_id, current_user)
+    except FileItemNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.post("/{file_id}/star")
+def star_file(
+    file_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Star / favorite a file or folder for quick access.
+    """
+    try:
+        StorageService.star_item(db, current_user.organization_id, file_id, current_user)
+        return {"message": "Item starred successfully"}
+    except FileItemNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.delete("/{file_id}/star")
+def unstar_file(
+    file_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Unstar / remove a file or folder from favorites.
+    """
+    try:
+        StorageService.unstar_item(db, current_user.organization_id, file_id, current_user)
+        return {"message": "Item unstarred successfully"}
+    except FileItemNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.post("/{file_id}/tags", response_model=FileTagResponse)
+def assign_tags_to_file(
+    file_id: uuid.UUID,
+    payload: FileTagAssignRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Assign color-coded classification tags to a document (requires Editor permission).
+    """
+    try:
+        return TagService.assign_tags_to_file(
+            db=db,
+            org_id=current_user.organization_id,
+            file_id=file_id,
+            tag_ids=payload.tag_ids,
+            actor=current_user,
+        )
+    except LicenseReadOnlyLockdownError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except TagNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except FileItemNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except (TagDomainError, StorageDomainError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/{file_id}/tags/{tag_id}")
+def remove_tag_from_file(
+    file_id: uuid.UUID,
+    tag_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Remove a classification tag from a document.
+    """
+    try:
+        TagService.remove_tag_from_file(
+            db=db,
+            org_id=current_user.organization_id,
+            file_id=file_id,
+            tag_id=tag_id,
+            actor=current_user,
+        )
+        return {"message": "Tag removed from file successfully"}
+    except LicenseReadOnlyLockdownError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except FileItemNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except (TagDomainError, StorageDomainError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/{file_id}/tags", response_model=List[TagResponse])
+def get_file_tags(
+    file_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List all classification tags assigned to a file.
+    """
+    try:
+        return TagService.get_file_tags(
+            db=db,
+            org_id=current_user.organization_id,
+            file_id=file_id,
+            actor=current_user,
+        )
     except FileItemNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except DriveAccessDeniedError as e:

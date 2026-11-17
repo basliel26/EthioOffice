@@ -11,6 +11,7 @@ from app.models.letter import (
     RoutingAction,
     RoutingStatus,
 )
+from app.schemas.letter_attachment import LetterAttachmentResponse
 
 
 class LetterRoutingCreate(BaseModel):
@@ -141,6 +142,7 @@ class LetterResponse(BaseModel):
 
 class LetterDetailResponse(LetterResponse):
     routings: List[LetterRoutingResponse] = []
+    attachments: List[LetterAttachmentResponse] = []
     reply_count: int = 0
 
 

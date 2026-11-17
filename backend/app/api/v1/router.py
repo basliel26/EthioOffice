@@ -13,6 +13,8 @@ from app.api.v1.endpoints import (
     localization,
     search,
     audit,
+    tags,
+    notifications,
 )
 
 api_router = APIRouter()
@@ -42,3 +44,5 @@ api_router.include_router(calendar.router, prefix="/calendar", tags=["Module 8: 
 api_router.include_router(letters.router, prefix="/letters", tags=["Module 9: Official Letter Registry (የደብዳቤ መዝገብ)"])
 api_router.include_router(search.router, prefix="/search", tags=["Module 10: Full-Text Search & Metadata Indexing Engine"])
 api_router.include_router(audit.router, prefix="/audit", tags=["Module 11: Audit, Compliance & Observability (የቁጥጥር ስርዓት)"])
+api_router.include_router(tags.router, prefix="/tags", tags=["Document Tags & Taxonomy Classification Engine"])
+api_router.include_router(notifications.router, prefix="/notifications", tags=["In-App Notifications & Event Alert Engine"])

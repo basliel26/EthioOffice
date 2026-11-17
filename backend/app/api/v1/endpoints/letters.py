@@ -24,6 +24,7 @@ from app.schemas.letter import (
     LetterDispatchRequest,
     LetterAnalyticsSummary,
 )
+from app.schemas.letter_attachment import LetterAttachmentCreate, LetterAttachmentResponse
 from app.services.letter_service import LetterService
 from app.services.capability_service import require_capability, Capability
 
@@ -246,3 +247,61 @@ def archive_letter(
     """
     letter = LetterService.archive_letter(db=db, user=current_user, letter_id=id)
     return LetterService.get_letter_detail(db=db, user=current_user, letter_id=letter.id)
+
+
+@router.post("/{id}/attachments", response_model=LetterAttachmentResponse, status_code=status.HTTP_201_CREATED)
+def attach_drive_file(
+    id: uuid.UUID,
+    payload: LetterAttachmentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Attach a personal or company drive file to an official letter (PRIMARY_SIGNED_PDF, SUPPORTING_DOCUMENT, ANNEX).
+    """
+    return LetterService.attach_drive_file(
+        db=db,
+        org_id=current_user.organization_id,
+        letter_id=id,
+        file_id=payload.file_id,
+        attachment_type=payload.attachment_type,
+        notes=payload.notes,
+        actor=current_user,
+    )
+
+
+@router.get("/{id}/attachments", response_model=List[LetterAttachmentResponse])
+def list_letter_attachments(
+    id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List all drive documents attached to an official letter.
+    """
+    return LetterService.list_attachments(
+        db=db,
+        org_id=current_user.organization_id,
+        letter_id=id,
+        actor=current_user,
+    )
+
+
+@router.delete("/{id}/attachments/{attachment_id}", status_code=status.HTTP_200_OK)
+def delete_letter_attachment(
+    id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Remove an attached document from an official letter.
+    """
+    LetterService.delete_attachment(
+        db=db,
+        org_id=current_user.organization_id,
+        letter_id=id,
+        attachment_id=attachment_id,
+        actor=current_user,
+    )
+    return {"message": "Attachment removed successfully"}

@@ -124,6 +124,7 @@ class LetterRegistry(Base):
     dispatched_by = relationship("User", foreign_keys=[dispatched_by_id])
     reply_to_letter = relationship("LetterRegistry", remote_side=[id], backref="replies")
     routings = relationship("LetterRouting", back_populates="letter", cascade="all, delete-orphan", order_by="desc(LetterRouting.transferred_at)")
+    attachments = relationship("LetterAttachment", back_populates="letter", cascade="all, delete-orphan")
 
 
 class LetterSequence(Base):

@@ -288,6 +288,25 @@ class ShareService:
         db.commit()
         db.refresh(share)
 
+        # Dispatch real-time in-app notification
+        try:
+            from app.services.notification_service import NotificationService
+            if target_user_id:
+                NotificationService.create_notification(
+                    db=db,
+                    org_id=org_id,
+                    user_id=target_user_id,
+                    actor_id=actor.id,
+                    event_type="FILE_SHARED",
+                    title=f"File Shared: {file_item.name}",
+                    title_amharic=f"ፋይል ተጋርቶልዎታል፦ {file_item.name}",
+                    message=f"{actor.full_name} shared '{file_item.name}' with you.",
+                    message_amharic=f"{actor.full_name} '{file_item.name}' የተባለውን ፋይል አጋርቶዎታል::",
+                    link=f"/files/{file_item.id}",
+                )
+        except Exception:
+            pass
+
         return cls.to_share_response(share)
 
     @classmethod

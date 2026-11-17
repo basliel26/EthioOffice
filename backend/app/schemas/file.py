@@ -64,6 +64,8 @@ class FileItemResponse(BaseModel):
     subfolder_count: Optional[int] = 0
     file_count: Optional[int] = 0
     breadcrumbs: Optional[List[BreadcrumbItem]] = None
+    is_starred: Optional[bool] = False
+    tags: Optional[List[str]] = []
     created_at: datetime
     updated_at: datetime
     ec_created_at: Optional[str] = None
@@ -131,4 +133,19 @@ class StorageAnalyticsResponse(BaseModel):
     total_files: int
     total_folders: int
     top_largest_files: List[LargestFileSummary]
+
+
+class RecentFileItemResponse(BaseModel):
+    file: FileItemResponse
+    last_action: str
+    last_action_amharic: str
+    last_action_at: datetime
+    last_action_at_ec: Optional[str] = None
+
+
+class EmptyTrashResponse(BaseModel):
+    purged_count: int
+    freed_bytes: int
+    freed_mb: float
+
 

@@ -22,7 +22,11 @@ from app.models.department import Department, UserDepartment
 from app.models.organization import Organization
 from app.models.file import FileItem
 from app.models.audit import AuditLog, AuditAction
+from app.models.letter_attachment import LetterAttachment
 from app.services.localization_service import LocalizationService
+from app.services.capability_service import CapabilityService
+from app.core.ethiopian_calendar import format_ethiopian_date
+from app.schemas.letter_attachment import LetterAttachmentResponse
 from app.schemas.letter import (
     LetterCreate,
     LetterUpdate,
@@ -415,6 +419,26 @@ class LetterService:
         db.add(audit)
         db.commit()
         db.refresh(letter)
+
+        # Notify letter author of approval
+        try:
+            from app.services.notification_service import NotificationService
+            if letter.created_by_id and letter.created_by_id != user.id:
+                NotificationService.create_notification(
+                    db=db,
+                    org_id=user.organization_id,
+                    user_id=letter.created_by_id,
+                    actor_id=user.id,
+                    event_type="LETTER_APPROVED",
+                    title=f"Letter Approved: {letter.reference_number}",
+                    title_amharic=f"ደብዳቤ ጸድቋል፦ {letter.reference_number}",
+                    message=f"Your outward letter '{letter.subject}' was approved by {user.full_name}.",
+                    message_amharic=f"የደብዳቤ ረቂቅዎ '{letter.subject}' በ{user.full_name} ጸድቋል::",
+                    link=f"/letters/{letter.id}",
+                )
+        except Exception:
+            pass
+
         return letter
 
     @classmethod
@@ -463,6 +487,26 @@ class LetterService:
         db.add(audit)
         db.commit()
         db.refresh(letter)
+
+        # Notify letter author of rejection
+        try:
+            from app.services.notification_service import NotificationService
+            if letter.created_by_id and letter.created_by_id != user.id:
+                NotificationService.create_notification(
+                    db=db,
+                    org_id=user.organization_id,
+                    user_id=letter.created_by_id,
+                    actor_id=user.id,
+                    event_type="LETTER_REJECTED",
+                    title=f"Letter Returned/Rejected: {letter.reference_number}",
+                    title_amharic=f"ደብዳቤ አልተፈቀደም / ተመልሷል፦ {letter.reference_number}",
+                    message=f"Your outward letter '{letter.subject}' was rejected by {user.full_name}. Reason: {reason.strip()}",
+                    message_amharic=f"የደብዳቤ ረቂቅዎ '{letter.subject}' በ{user.full_name} አልጸደቀም:: ምክንያት፦ {reason.strip()}",
+                    link=f"/letters/{letter.id}",
+                )
+        except Exception:
+            pass
+
         return letter
 
     @classmethod
@@ -600,6 +644,26 @@ class LetterService:
         db.add(audit)
         db.commit()
         db.refresh(routing)
+
+        # Notify recipient if assigned to a specific user
+        try:
+            from app.services.notification_service import NotificationService
+            if payload.to_user_id and payload.to_user_id != user.id:
+                NotificationService.create_notification(
+                    db=db,
+                    org_id=user.organization_id,
+                    user_id=payload.to_user_id,
+                    actor_id=user.id,
+                    event_type="LETTER_ROUTED",
+                    title=f"Letter Forwarded: {letter.reference_number}",
+                    title_amharic=f"ደብዳቤ ተመርቶልዎታል፦ {letter.reference_number}",
+                    message=f"Letter '{letter.subject}' was transferred to you by {user.full_name} for action: {routing.action_required.value}.",
+                    message_amharic=f"ደብዳቤ '{letter.subject}' በ{user.full_name} ለ{routing.action_required.value} እርምጃ ተመርቶልዎታል::",
+                    link=f"/letters/{letter.id}",
+                )
+        except Exception:
+            pass
+
         return routing
 
     @classmethod
@@ -798,6 +862,7 @@ class LetterService:
             created_at=letter.created_at,
             updated_at=letter.updated_at,
             routings=routing_responses,
+            attachments=cls.list_attachments(db, user.organization_id, letter.id, user),
             reply_count=reply_count,
         )
 
@@ -1010,3 +1075,165 @@ class LetterService:
             by_department=dept_counts,
             by_urgency=urgency_counts,
         )
+
+    @classmethod
+    def to_attachment_response(cls, att: LetterAttachment) -> LetterAttachmentResponse:
+        ec_date = format_ethiopian_date(att.created_at.date()) if att.created_at else None
+        return LetterAttachmentResponse(
+            id=att.id,
+            letter_id=att.letter_id,
+            file_id=att.file_id,
+            file_name=att.file_item.name if att.file_item else "Document",
+            mime_type=att.file_item.mime_type if att.file_item else None,
+            size_bytes=att.file_item.size_bytes if att.file_item else 0,
+            attachment_type=att.attachment_type,
+            notes=att.notes,
+            attached_by_name=att.attached_by.full_name if att.attached_by else None,
+            created_at=att.created_at,
+            ec_created_at=ec_date,
+        )
+
+    @classmethod
+    def attach_drive_file(
+        cls,
+        db: Session,
+        org_id: uuid.UUID,
+        letter_id: uuid.UUID,
+        file_id: uuid.UUID,
+        attachment_type: str,
+        notes: Optional[str],
+        actor: User,
+    ) -> LetterAttachmentResponse:
+        """
+        Attaches a file from Personal or Company Drive to an official letter.
+        Supports PRIMARY_SIGNED_PDF, SUPPORTING_DOCUMENT, and ANNEX.
+        """
+        CapabilityService.verify_organization_write_access(db, org_id)
+
+        letter = db.query(LetterRegistry).filter(
+            LetterRegistry.id == letter_id,
+            LetterRegistry.organization_id == org_id,
+        ).first()
+        if not letter:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ደብዳቤው አልተገኘም (Letter not found)")
+
+        if not cls.check_letter_access(letter, actor, db):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="ይህን ደብዳቤ የማየት ፈቃድ የለዎትም (Access denied to letter)")
+
+        from app.services.storage_service import StorageService, DriveAccessDeniedError
+        try:
+            file_item = StorageService.get_item(db, org_id, file_id, actor)
+        except DriveAccessDeniedError:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="ይህን ፋይል የማያያዝ ፈቃድ የለዎትም (Access denied to file)")
+
+        if file_item.is_folder:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="አቃፊዎችን (Folders) ለደብዳቤ ማያያዝ አይቻልም")
+
+        # Check existing attachment
+        existing = db.query(LetterAttachment).filter(
+            LetterAttachment.letter_id == letter.id,
+            LetterAttachment.file_id == file_item.id,
+        ).first()
+        if existing:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ይህ ፋይል ቀደም ሲል ለደብዳቤው ተያይዟል (File is already attached to this letter)")
+
+        att = LetterAttachment(
+            organization_id=org_id,
+            letter_id=letter.id,
+            file_id=file_item.id,
+            attachment_type=attachment_type,
+            notes=notes.strip() if notes else None,
+            attached_by_id=actor.id,
+        )
+        db.add(att)
+
+        if attachment_type == "PRIMARY_SIGNED_PDF":
+            letter.attachment_file_id = file_item.id
+
+        audit = AuditLog(
+            organization_id=org_id,
+            user_id=actor.id,
+            action=AuditAction.CONFIG_CHANGE,
+            target_type="LETTER",
+            target_id=letter.id,
+            target_name=letter.reference_number,
+            details={"action": "ATTACH_FILE", "file_name": file_item.name, "type": attachment_type},
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(att)
+
+        return cls.to_attachment_response(att)
+
+    @classmethod
+    def list_attachments(
+        cls,
+        db: Session,
+        org_id: uuid.UUID,
+        letter_id: uuid.UUID,
+        actor: User,
+    ) -> List[LetterAttachmentResponse]:
+        """Lists all files attached to a letter."""
+        letter = db.query(LetterRegistry).filter(
+            LetterRegistry.id == letter_id,
+            LetterRegistry.organization_id == org_id,
+        ).first()
+        if not letter:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ደብዳቤው አልተገኘም (Letter not found)")
+
+        if not cls.check_letter_access(letter, actor, db):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+        attachments = db.query(LetterAttachment).filter(
+            LetterAttachment.letter_id == letter.id,
+            LetterAttachment.organization_id == org_id,
+        ).order_by(LetterAttachment.created_at.asc()).all()
+
+        return [cls.to_attachment_response(a) for a in attachments]
+
+    @classmethod
+    def delete_attachment(
+        cls,
+        db: Session,
+        org_id: uuid.UUID,
+        letter_id: uuid.UUID,
+        attachment_id: uuid.UUID,
+        actor: User,
+    ) -> bool:
+        """Removes an attachment from a letter."""
+        CapabilityService.verify_organization_write_access(db, org_id)
+
+        letter = db.query(LetterRegistry).filter(
+            LetterRegistry.id == letter_id,
+            LetterRegistry.organization_id == org_id,
+        ).first()
+        if not letter:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ደብዳቤው አልተገኘም (Letter not found)")
+
+        if not cls.check_letter_access(letter, actor, db):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+        att = db.query(LetterAttachment).filter(
+            LetterAttachment.id == attachment_id,
+            LetterAttachment.letter_id == letter.id,
+        ).first()
+        if not att:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ተያያዥ ሰነድ አልተገኘም (Attachment not found)")
+
+        if letter.attachment_file_id == att.file_id:
+            letter.attachment_file_id = None
+
+        db.delete(att)
+
+        audit = AuditLog(
+            organization_id=org_id,
+            user_id=actor.id,
+            action=AuditAction.CONFIG_CHANGE,
+            target_type="LETTER",
+            target_id=letter.id,
+            target_name=letter.reference_number,
+            details={"action": "REMOVE_ATTACHMENT", "attachment_id": str(attachment_id)},
+        )
+        db.add(audit)
+        db.commit()
+        return True

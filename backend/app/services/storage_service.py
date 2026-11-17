@@ -21,6 +21,7 @@ from app.models.lock import FileLock
 from app.models.user import User, UserRole
 from app.models.department import Department
 from app.models.audit import AuditLog, AuditAction
+from app.models.favorite import UserFavorite
 from app.services.tenant_service import TenantService, StorageQuotaExceededError
 from app.services.capability_service import CapabilityService, LicenseReadOnlyLockdownError
 from app.core.ethiopian_calendar import format_ethiopian_date
@@ -32,6 +33,8 @@ from app.schemas.file import (
     BatchDeleteResponse,
     StorageAnalyticsResponse,
     LargestFileSummary,
+    RecentFileItemResponse,
+    EmptyTrashResponse,
 )
 
 
@@ -206,8 +209,8 @@ storage_provider = LocalStorageProvider(settings.STORAGE_ROOT)
 
 class StorageService:
     @classmethod
-    def to_file_response(cls, db: Session, item: FileItem) -> FileItemResponse:
-        """Converts ORM entity to API response model with calculated counts & lock status."""
+    def to_file_response(cls, db: Session, item: FileItem, current_user: Optional[User] = None) -> FileItemResponse:
+        """Converts ORM entity to API response model with calculated counts, lock status, star status, and tags."""
         is_locked = False
         lock_info = None
         if item.lock and item.lock.expires_at > datetime.now(timezone.utc):
@@ -235,6 +238,20 @@ class StorageService:
 
         ec_date = format_ethiopian_date(item.created_at.date()) if item.created_at else None
 
+        # Check starred status
+        is_starred = False
+        if current_user:
+            fav = db.query(UserFavorite).filter(
+                UserFavorite.user_id == current_user.id,
+                UserFavorite.file_id == item.id,
+            ).first()
+            is_starred = fav is not None
+
+        # Collect tags
+        tags_list = []
+        if hasattr(item, "tags") and item.tags:
+            tags_list = [ft.tag.name for ft in item.tags if ft.tag]
+
         return FileItemResponse(
             id=item.id,
             name=item.name,
@@ -251,6 +268,8 @@ class StorageService:
             lock_info=lock_info,
             subfolder_count=subfolder_count,
             file_count=file_count,
+            is_starred=is_starred,
+            tags=tags_list,
             created_at=item.created_at,
             updated_at=item.updated_at,
             ec_created_at=ec_date,
@@ -333,7 +352,7 @@ class StorageService:
                     query = query.filter(FileItem.parent_id == None)
 
         items = query.order_by(FileItem.is_folder.desc(), FileItem.name.asc()).all()
-        return [cls.to_file_response(db, i) for i in items]
+        return [cls.to_file_response(db, i, current_user=user) for i in items]
 
     @classmethod
     def create_folder(
@@ -1009,4 +1028,233 @@ class StorageService:
             total_folders=total_folders,
             top_largest_files=top_largest,
         )
+
+    @classmethod
+    def star_item(cls, db: Session, org_id: uuid.UUID, file_id: uuid.UUID, user: User) -> bool:
+        """Adds a document or folder to user's favorites (stars)."""
+        item = cls.get_item(db, org_id, file_id, user)
+        existing = db.query(UserFavorite).filter(
+            UserFavorite.user_id == user.id,
+            UserFavorite.file_id == item.id,
+        ).first()
+        if not existing:
+            fav = UserFavorite(user_id=user.id, file_id=item.id)
+            db.add(fav)
+            db.commit()
+        return True
+
+    @classmethod
+    def unstar_item(cls, db: Session, org_id: uuid.UUID, file_id: uuid.UUID, user: User) -> bool:
+        """Removes a document or folder from user's favorites (unstar)."""
+        item = cls.get_item(db, org_id, file_id, user)
+        existing = db.query(UserFavorite).filter(
+            UserFavorite.user_id == user.id,
+            UserFavorite.file_id == item.id,
+        ).first()
+        if existing:
+            db.delete(existing)
+            db.commit()
+        return True
+
+    @classmethod
+    def list_starred_items(cls, db: Session, org_id: uuid.UUID, user: User) -> List[FileItemResponse]:
+        """Lists all files and folders starred by the current user."""
+        items = db.query(FileItem).join(
+            UserFavorite, UserFavorite.file_id == FileItem.id
+        ).filter(
+            UserFavorite.user_id == user.id,
+            FileItem.organization_id == org_id,
+            FileItem.is_deleted == False,
+        ).order_by(UserFavorite.created_at.desc()).all()
+
+        results = []
+        for it in items:
+            try:
+                cls.get_item(db, org_id, it.id, user)
+                results.append(cls.to_file_response(db, it, current_user=user))
+            except DriveAccessDeniedError:
+                continue
+        return results
+
+    @classmethod
+    def get_recent_items(cls, db: Session, org_id: uuid.UUID, user: User, limit: int = 20) -> List[RecentFileItemResponse]:
+        """
+        Retrieves user's recent file activity feed with action descriptions and Amharic localization.
+        """
+        action_map = {
+            AuditAction.UPLOAD: ("UPLOAD", "ተሰቅሏል / ተቀይሯል"),
+            AuditAction.VIEW: ("VIEW", "ተመልክቷል"),
+            AuditAction.DOWNLOAD: ("DOWNLOAD", "ተወስዷል"),
+            AuditAction.LOCK: ("LOCK", "ተቆልፏል"),
+            AuditAction.UNLOCK: ("UNLOCK", "ተለቋል"),
+            AuditAction.SHARE: ("SHARE", "ተጋርቷል"),
+            AuditAction.DELETE: ("DELETE", "ተሰርዟል"),
+            AuditAction.CONFIG_CHANGE: ("CONFIG", "ተስተካክሏል"),
+        }
+
+        logs = db.query(AuditLog).filter(
+            AuditLog.organization_id == org_id,
+            AuditLog.user_id == user.id,
+            AuditLog.target_type == "FILE",
+        ).order_by(AuditLog.created_at.desc()).limit(limit * 3).all()
+
+        seen_file_ids = set()
+        recent_items = []
+
+        for log in logs:
+            if not log.target_id or log.target_id in seen_file_ids:
+                continue
+
+            file_item = db.query(FileItem).filter(
+                FileItem.id == log.target_id,
+                FileItem.organization_id == org_id,
+                FileItem.is_deleted == False,
+            ).first()
+
+            if not file_item:
+                continue
+
+            try:
+                cls.get_item(db, org_id, file_item.id, user)
+            except DriveAccessDeniedError:
+                continue
+
+            seen_file_ids.add(log.target_id)
+            act_str, act_amharic = action_map.get(
+                log.action,
+                (str(log.action.value if hasattr(log.action, "value") else log.action), "ተከናውኗል")
+            )
+            ec_dt = format_ethiopian_date(log.created_at.date()) if log.created_at else None
+
+            recent_items.append(RecentFileItemResponse(
+                file=cls.to_file_response(db, file_item, current_user=user),
+                last_action=act_str,
+                last_action_amharic=act_amharic,
+                last_action_at=log.created_at,
+                last_action_at_ec=ec_dt,
+            ))
+
+            if len(recent_items) >= limit:
+                break
+
+        # Supplement with recently updated files accessible to user if needed
+        if len(recent_items) < limit:
+            fallback_files = db.query(FileItem).filter(
+                FileItem.organization_id == org_id,
+                FileItem.is_deleted == False,
+                FileItem.is_folder == False,
+            ).order_by(FileItem.updated_at.desc()).limit(limit * 2).all()
+
+            for f in fallback_files:
+                if f.id in seen_file_ids:
+                    continue
+                try:
+                    cls.get_item(db, org_id, f.id, user)
+                except DriveAccessDeniedError:
+                    continue
+
+                seen_file_ids.add(f.id)
+                ec_dt = format_ethiopian_date(f.updated_at.date()) if f.updated_at else None
+                recent_items.append(RecentFileItemResponse(
+                    file=cls.to_file_response(db, f, current_user=user),
+                    last_action="UPDATED",
+                    last_action_amharic="የተሻሻለ",
+                    last_action_at=f.updated_at,
+                    last_action_at_ec=ec_dt,
+                ))
+                if len(recent_items) >= limit:
+                    break
+
+        return recent_items
+
+    @classmethod
+    def empty_trash(
+        cls,
+        db: Session,
+        org_id: uuid.UUID,
+        actor: User,
+        drive_type: Optional[str] = None
+    ) -> EmptyTrashResponse:
+        """
+        Permanently purges all items currently in the Recycle Bin.
+        - Org Admin / Super Admin can purge all trashed items (or scoped by drive type).
+        - Regular employees can purge their own personal trashed items.
+        Physically deletes files if unreferenced and atomically reclaims storage quota.
+        """
+        CapabilityService.verify_organization_write_access(db, org_id)
+
+        query = db.query(FileItem).filter(
+            FileItem.organization_id == org_id,
+            FileItem.is_deleted == True,
+        )
+
+        if not (actor.is_admin or actor.is_superuser):
+            query = query.filter(
+                FileItem.owner_id == actor.id,
+                FileItem.drive_type == DriveType.PERSONAL,
+            )
+        elif drive_type:
+            drive_enum = DriveType.COMPANY if drive_type.upper() == "COMPANY" else DriveType.PERSONAL
+            query = query.filter(FileItem.drive_type == drive_enum)
+
+        trashed_items = query.all()
+        if not trashed_items:
+            return EmptyTrashResponse(purged_count=0, freed_bytes=0, freed_mb=0.0)
+
+        all_to_purge = []
+        seen = set()
+        for root in trashed_items:
+            if root.id not in seen:
+                seen.add(root.id)
+                all_to_purge.append(root)
+            if root.is_folder:
+                for child in cls._collect_descendant_ids(db, org_id, root.id):
+                    if child.id not in seen:
+                        seen.add(child.id)
+                        all_to_purge.append(child)
+
+        total_freed_bytes = 0
+        purged_count = 0
+
+        for item in reversed(all_to_purge):
+            if not item.is_folder:
+                for version in item.versions:
+                    other_refs = db.query(FileVersion).filter(
+                        FileVersion.storage_path == version.storage_path,
+                        FileVersion.id != version.id
+                    ).count()
+                    if other_refs == 0:
+                        storage_provider.delete_payload(version.storage_path)
+
+                total_freed_bytes += item.size_bytes
+
+            db.delete(item)
+            purged_count += 1
+
+        if total_freed_bytes > 0:
+            TenantService.record_storage_change(db, org_id, -total_freed_bytes)
+
+        audit = AuditLog(
+            organization_id=org_id,
+            user_id=actor.id,
+            action=AuditAction.DELETE,
+            target_type="TRASH",
+            target_id=org_id,
+            target_name="Recycle Bin",
+            details={
+                "action": "EMPTY_TRASH",
+                "purged_count": purged_count,
+                "freed_bytes": total_freed_bytes,
+            }
+        )
+        db.add(audit)
+        db.commit()
+
+        freed_mb = round(total_freed_bytes / (1024 * 1024), 2)
+        return EmptyTrashResponse(
+            purged_count=purged_count,
+            freed_bytes=total_freed_bytes,
+            freed_mb=freed_mb,
+        )
+
 

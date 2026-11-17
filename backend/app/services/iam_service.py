@@ -380,3 +380,173 @@ class IAMService:
         db.add(audit)
         db.commit()
         return True
+
+    @classmethod
+    def update_profile(
+        cls,
+        db: Session,
+        user: User,
+        full_name: Optional[str] = None,
+        phone_number: Optional[str] = None,
+        avatar_url: Optional[str] = None,
+    ) -> User:
+        """
+        Updates an employee's personal profile information.
+        """
+        if full_name is not None:
+            clean_name = full_name.strip()
+            if not clean_name:
+                raise ValueError("ስም ባዶ መሆን አይችልም (Full name cannot be empty)")
+            user.full_name = clean_name
+
+        if phone_number is not None:
+            user.phone_number = phone_number.strip() if phone_number.strip() else None
+
+        if avatar_url is not None:
+            user.avatar_url = avatar_url.strip() if avatar_url.strip() else None
+
+        audit = AuditLog(
+            organization_id=user.organization_id,
+            user_id=user.id,
+            action=AuditAction.CONFIG_CHANGE,
+            target_type="USER",
+            target_id=user.id,
+            target_name=user.full_name,
+            details={"action": "PROFILE_UPDATED"}
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(user)
+        return user
+
+    @classmethod
+    def change_password(
+        cls,
+        db: Session,
+        user: User,
+        current_password: str,
+        new_password: str,
+    ) -> bool:
+        """
+        Self-service password change: validates current password, validates new password complexity,
+        updates hash, and revokes all active sessions for security.
+        """
+        if not verify_password(current_password, user.hashed_password):
+            raise AuthenticationError("የአሁኑ የይለፍ ቃል የተሳሳተ ነው (Current password is incorrect)")
+
+        cls.validate_password_strength(new_password)
+
+        if verify_password(new_password, user.hashed_password):
+            raise PasswordValidationError("አዲሱ የይለፍ ቃል ከአሮጌው ጋር ተመሳሳይ መሆን አይችልም (New password cannot be the same as current password)")
+
+        user.hashed_password = get_password_hash(new_password)
+
+        # Revoke all active sessions
+        db.query(UserSession).filter(UserSession.user_id == user.id).delete()
+
+        audit = AuditLog(
+            organization_id=user.organization_id,
+            user_id=user.id,
+            action=AuditAction.LOGIN,
+            target_type="USER",
+            target_id=user.id,
+            target_name=user.full_name,
+            details={"action": "PASSWORD_CHANGED"}
+        )
+        db.add(audit)
+        db.commit()
+        return True
+
+    @classmethod
+    def admin_reset_password(
+        cls,
+        db: Session,
+        org_id: uuid.UUID,
+        user_id: uuid.UUID,
+        new_password: str,
+        actor: User,
+    ) -> bool:
+        """
+        Administrative password reset: resets employee password, clears lockouts, and revokes sessions.
+        """
+        if not (actor.is_admin or actor.is_superuser):
+            raise AuthenticationError("ይህን እርምጃ ለመፈጸም የአስተዳዳሪ ፈቃድ ያስፈልጋል (Admin privileges required)")
+
+        user = db.query(User).filter(User.id == user_id, User.organization_id == org_id).first()
+        if not user:
+            raise AuthenticationError("ተጠቃሚው አልተገኘም (User not found)")
+
+        cls.validate_password_strength(new_password)
+        user.hashed_password = get_password_hash(new_password)
+        user.failed_login_attempts = 0
+        user.locked_until = None
+
+        db.query(UserSession).filter(UserSession.user_id == user.id).delete()
+
+        audit = AuditLog(
+            organization_id=org_id,
+            user_id=actor.id,
+            action=AuditAction.LOGIN,
+            target_type="USER",
+            target_id=user.id,
+            target_name=user.full_name,
+            details={"action": "PASSWORD_RESET_BY_ADMIN", "target_email": user.email}
+        )
+        db.add(audit)
+        db.commit()
+        return True
+
+    @classmethod
+    def lock_user_account(
+        cls,
+        db: Session,
+        org_id: uuid.UUID,
+        user_id: uuid.UUID,
+        actor: User,
+        lock_duration_hours: Optional[int] = None,
+        reason: Optional[str] = None,
+    ) -> bool:
+        """
+        Administrative account lock: prevents employee login and terminates active sessions.
+        """
+        if not (actor.is_admin or actor.is_superuser):
+            raise AuthenticationError("ይህን እርምጃ ለመፈጸም የአስተዳዳሪ ፈቃድ ያስፈልጋል (Admin privileges required)")
+
+        if user_id == actor.id:
+            raise AuthenticationError("የራስዎን አካውንት ማገድ አይችሉም (Cannot lock your own account)")
+
+        user = db.query(User).filter(User.id == user_id, User.organization_id == org_id).first()
+        if not user:
+            raise AuthenticationError("ተጠቃሚው አልተገኘም (User not found)")
+
+        if user.is_superuser and not actor.is_superuser:
+            raise AuthenticationError("የስርዓት አስተዳዳሪን ማገድ አይቻልም (Cannot lock a Super Admin)")
+
+        now = datetime.now(timezone.utc)
+        if lock_duration_hours:
+            user.locked_until = now + timedelta(hours=lock_duration_hours)
+        else:
+            # Indefinite lock (100 years)
+            user.locked_until = now + timedelta(days=36500)
+
+        # Terminate active sessions immediately
+        db.query(UserSession).filter(UserSession.user_id == user.id).delete()
+
+        audit = AuditLog(
+            organization_id=org_id,
+            user_id=actor.id,
+            action=AuditAction.LOGIN,
+            target_type="USER",
+            target_id=user.id,
+            target_name=user.full_name,
+            details={
+                "action": "ACCOUNT_LOCKED_BY_ADMIN",
+                "target_email": user.email,
+                "reason": reason or "Administrative suspension",
+                "locked_until": str(user.locked_until),
+            }
+        )
+        db.add(audit)
+        db.commit()
+        return True
+
