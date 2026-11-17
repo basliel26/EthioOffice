@@ -67,7 +67,7 @@ def test_letter_registry():
     headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
 
     # List letters
-    r_letters = client.get("/api/v1/letters?limit=200", headers=headers)
+    r_letters = client.get("/api/v1/letters?search=ABYSS/FIN/2019/001", headers=headers)
     assert r_letters.status_code == 200
     letters = r_letters.json()
     assert len(letters) >= 1
