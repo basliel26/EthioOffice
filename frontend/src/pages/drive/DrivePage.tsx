@@ -64,10 +64,12 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     { id: null, name: getRootBreadcrumbName(viewMode) },
   ]);
   const [isLoading, setIsLoading] = useState(false);
+  const requestIdRef = useRef(0);
   const { setSearchScope, clearSearchScope } = useSearchScope();
 
   // Reset folder navigation & breadcrumbs when switching between drive views
   useEffect(() => {
+    setFiles([]);
     setCurrentFolderId(null);
     setBreadcrumbs([{ id: null, name: getRootBreadcrumbName(viewMode) }]);
     setSelectedTagFilter(null);
@@ -75,6 +77,18 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     setCanvasContextMenu(null);
     setRowContextMenu(null);
     setActiveRowMenuId(null);
+  }, [viewMode]);
+
+  // Handle clicking active drive in sidebar: smooth reset to root
+  useEffect(() => {
+    const handleNavRoot = () => {
+      setFiles([]);
+      setCurrentFolderId(null);
+      setBreadcrumbs([{ id: null, name: getRootBreadcrumbName(viewMode) }]);
+      setSelectedTagFilter(null);
+    };
+    window.addEventListener('ethiooffice-nav-root', handleNavRoot);
+    return () => window.removeEventListener('ethiooffice-nav-root', handleNavRoot);
   }, [viewMode]);
 
   useEffect(() => {
@@ -200,38 +214,43 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     },
   ];
 
-  const loadData = async () => {
+  const loadData = async (folderId: string | null = currentFolderId) => {
+    const reqId = ++requestIdRef.current;
     setIsLoading(true);
     try {
+      let data: FileItem[] = [];
       if (viewMode === 'STARRED') {
-        const data = await filesApi.listStarred();
-        setFiles(data);
+        data = await filesApi.listStarred();
       } else if (viewMode === 'RECENT') {
-        const data = await filesApi.getRecent(30);
-        setFiles(data.map((r) => r.file));
+        const recent = await filesApi.getRecent(30);
+        data = recent.map((r) => r.file);
       } else if (viewMode === 'TRASH') {
-        const data = await filesApi.list('TRASH', currentFolderId || undefined);
-        setFiles(data);
+        data = await filesApi.list('TRASH', folderId || undefined);
       } else if (viewMode === 'SHARED') {
-        const data = await sharesApi.listSharedWithMe();
-        setFiles(data);
+        data = await sharesApi.listSharedWithMe();
       } else {
         const driveType = viewMode === 'COMPANY' ? 'COMPANY' : 'PERSONAL';
-        const data = await filesApi.list(driveType, currentFolderId || undefined);
-        setFiles(data);
+        data = await filesApi.list(driveType, folderId || undefined);
       }
 
+      if (reqId !== requestIdRef.current) return;
+      setFiles(data);
+
       const tags = await tagsApi.list();
-      setAvailableTags(tags);
+      if (reqId === requestIdRef.current) {
+        setAvailableTags(tags);
+      }
     } catch {
       // ignore
     } finally {
-      setIsLoading(false);
+      if (reqId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadData(currentFolderId);
   }, [viewMode, currentFolderId]);
 
   const handleCreateFolder = async (e: React.FormEvent) => {
@@ -390,12 +409,14 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   };
 
   const handleOpenFolder = (folder: FileItem) => {
+    setFiles([]);
     setCurrentFolderId(folder.id);
     setBreadcrumbs((prev) => [...prev, { id: folder.id, name: folder.name }]);
   };
 
   const handleNavigateBreadcrumb = (index: number) => {
     const target = breadcrumbs[index];
+    setFiles([]);
     setCurrentFolderId(target.id);
     setBreadcrumbs((prev) => prev.slice(0, index + 1));
   };

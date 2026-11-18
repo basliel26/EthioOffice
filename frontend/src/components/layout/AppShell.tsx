@@ -172,19 +172,39 @@ export const AppShell: React.FC = () => {
                 Drives & Locations
               </p>
               <nav className="space-y-1">
-                <NavLink to="/drive/personal" className={navItemClass} title="Personal Drive">
+                <NavLink
+                  to="/drive/personal"
+                  className={navItemClass}
+                  title="Personal Drive"
+                  onClick={() => window.dispatchEvent(new CustomEvent('ethiooffice-nav-root'))}
+                >
                   <HardDrive className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Personal Drive</span>
                 </NavLink>
-                <NavLink to="/drive/company" className={navItemClass} title="Company Drive">
+                <NavLink
+                  to="/drive/company"
+                  className={navItemClass}
+                  title="Company Drive"
+                  onClick={() => window.dispatchEvent(new CustomEvent('ethiooffice-nav-root'))}
+                >
                   <Building2 className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Company Drive</span>
                 </NavLink>
-                <NavLink to="/drive/shared" className={navItemClass} title="Shared with me">
+                <NavLink
+                  to="/drive/shared"
+                  className={navItemClass}
+                  title="Shared with me"
+                  onClick={() => window.dispatchEvent(new CustomEvent('ethiooffice-nav-root'))}
+                >
                   <Share2 className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Shared with me</span>
                 </NavLink>
-                <NavLink to="/drive/trash" className={navItemClass} title="Recycle Bin">
+                <NavLink
+                  to="/drive/trash"
+                  className={navItemClass}
+                  title="Recycle Bin"
+                  onClick={() => window.dispatchEvent(new CustomEvent('ethiooffice-nav-root'))}
+                >
                   <Trash2 className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Recycle Bin</span>
                 </NavLink>

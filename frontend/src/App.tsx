@@ -78,12 +78,12 @@ export default function App() {
             
             {/* Drive & File Workspace */}
             <Route path="/drive" element={<Navigate to="/drive/personal" replace />} />
-            <Route path="/drive/personal" element={<DrivePage viewMode="PERSONAL" />} />
-            <Route path="/drive/company" element={<DrivePage viewMode="COMPANY" />} />
-            <Route path="/drive/shared" element={<DrivePage viewMode="SHARED" />} />
-            <Route path="/drive/starred" element={<DrivePage viewMode="STARRED" />} />
-            <Route path="/drive/recent" element={<DrivePage viewMode="RECENT" />} />
-            <Route path="/drive/trash" element={<DrivePage viewMode="TRASH" />} />
+            <Route path="/drive/personal" element={<DrivePage key="PERSONAL" viewMode="PERSONAL" />} />
+            <Route path="/drive/company" element={<DrivePage key="COMPANY" viewMode="COMPANY" />} />
+            <Route path="/drive/shared" element={<DrivePage key="SHARED" viewMode="SHARED" />} />
+            <Route path="/drive/starred" element={<DrivePage key="STARRED" viewMode="STARRED" />} />
+            <Route path="/drive/recent" element={<DrivePage key="RECENT" viewMode="RECENT" />} />
+            <Route path="/drive/trash" element={<DrivePage key="TRASH" viewMode="TRASH" />} />
 
             {/* Official Letter Registry */}
             <Route path="/letters" element={<LettersPage />} />
