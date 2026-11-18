@@ -15,7 +15,6 @@ import {
   Building2,
   FolderKanban,
   Database,
-  PanelLeft,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { filesApi } from '../../api/client';
@@ -95,11 +94,16 @@ export const AppShell: React.FC = () => {
         }`}
       >
         <div>
-          {/* Organization Brand Header */}
+          {/* Organization Brand Header (Company Logo collapses/expands sidebar) */}
           <div className={`p-4 flex items-center border-b border-slate-100 ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-            <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200/80 text-blue-600 flex items-center justify-center font-bold text-xs tracking-wider shrink-0 shadow-xs">
+            <button
+              type="button"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="w-9 h-9 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200/80 text-blue-600 flex items-center justify-center font-bold text-xs tracking-wider shrink-0 shadow-xs transition-all active:scale-95 cursor-pointer focus:outline-none"
+              title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
               <FolderKanban className="w-5 h-5 text-blue-600" />
-            </div>
+            </button>
             {!isCollapsed && (
               <div className="min-w-0 flex-1">
                 <h2 className="text-sm font-bold text-slate-900 truncate tracking-tight">
@@ -253,17 +257,9 @@ export const AppShell: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header Bar */}
         <header className="h-14 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
-          {/* Left: Sidebar Collapse Toggle + Page Title (Pure English) */}
+          {/* Left: Page Title (Pure English & Prominent) */}
           <div className="flex items-center gap-3 shrink-0">
-            <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors focus:outline-none"
-              title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              <PanelLeft className="w-4 h-4" />
-            </button>
-
-            <h1 className="text-base font-bold text-slate-900 tracking-tight hidden sm:block">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
               {getPageTitle(location.pathname)}
             </h1>
           </div>
