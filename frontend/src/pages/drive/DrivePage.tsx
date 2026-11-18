@@ -301,7 +301,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     <div className="space-y-3 select-none font-sans">
       {/* Location Breadcrumbs & Action Buttons on the Same Line */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2.5 border-b border-slate-200/80">
-        {/* Left: Location / Breadcrumbs (Same size as navbar title, 1px tighter, no bold) */}
+        {/* Left: Location / Breadcrumbs (Same size as navbar title, perfectly dialed, no bold) */}
         <div className="flex items-center gap-1.5 overflow-x-auto min-w-0">
           {viewMode !== 'STARRED' && viewMode !== 'RECENT' ? (
             breadcrumbs.map((b, idx) => (
@@ -309,7 +309,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                 {idx > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
                 <button
                   onClick={() => handleNavigateBreadcrumb(idx)}
-                  className={`transition-colors whitespace-nowrap text-sm sm:text-[15px] md:text-[17px] lg:text-[19px] font-normal ${
+                  className={`transition-colors whitespace-nowrap text-[13px] sm:text-[14px] md:text-[16px] lg:text-[18px] font-normal ${
                     idx === breadcrumbs.length - 1
                       ? 'text-slate-800 cursor-default'
                       : 'text-slate-400 hover:text-slate-700'
@@ -324,14 +324,14 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
               {viewMode === 'STARRED' ? (
                 <>
                   <Star className="w-4 h-4 text-amber-500 fill-amber-400 shrink-0" />
-                  <span className="text-slate-800 text-sm sm:text-[15px] md:text-[17px] lg:text-[19px] font-normal">
+                  <span className="text-slate-800 text-[13px] sm:text-[14px] md:text-[16px] lg:text-[18px] font-normal">
                     Starred Documents
                   </span>
                 </>
               ) : (
                 <>
                   <Clock className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span className="text-slate-800 text-sm sm:text-[15px] md:text-[17px] lg:text-[19px] font-normal">
+                  <span className="text-slate-800 text-[13px] sm:text-[14px] md:text-[16px] lg:text-[18px] font-normal">
                     Recent Activity
                   </span>
                 </>
