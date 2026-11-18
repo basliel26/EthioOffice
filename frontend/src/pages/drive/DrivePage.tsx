@@ -41,11 +41,41 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   const [availableTags, setAvailableTags] = useState<TagItem[]>([]);
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+
+  const getRootBreadcrumbName = (mode: string) => {
+    switch (mode) {
+      case 'COMPANY':
+        return 'Company Drive';
+      case 'SHARED':
+        return 'Shared with me';
+      case 'TRASH':
+        return 'Recycle Bin';
+      case 'STARRED':
+        return 'Starred Documents';
+      case 'RECENT':
+        return 'Recent Activity';
+      case 'PERSONAL':
+      default:
+        return 'Personal Drive';
+    }
+  };
+
   const [breadcrumbs, setBreadcrumbs] = useState<Array<{ id: string | null; name: string }>>([
-    { id: null, name: 'Home' },
+    { id: null, name: getRootBreadcrumbName(viewMode) },
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const { setSearchScope, clearSearchScope } = useSearchScope();
+
+  // Reset folder navigation & breadcrumbs when switching between drive views
+  useEffect(() => {
+    setCurrentFolderId(null);
+    setBreadcrumbs([{ id: null, name: getRootBreadcrumbName(viewMode) }]);
+    setSelectedTagFilter(null);
+    setShowNewDocMenu(false);
+    setCanvasContextMenu(null);
+    setRowContextMenu(null);
+    setActiveRowMenuId(null);
+  }, [viewMode]);
 
   useEffect(() => {
     if (currentFolderId && breadcrumbs.length > 1) {
@@ -87,7 +117,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openCanvasContextMenu = (e: React.MouseEvent) => {
-    if (viewMode === 'TRASH') return;
+    if (viewMode !== 'PERSONAL' && viewMode !== 'COMPANY') return;
     e.preventDefault();
     const menuWidth = 230;
     const menuHeight = 260;
@@ -438,7 +468,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
             >
               Empty Recycle Bin
             </Button>
-          ) : (
+          ) : viewMode === 'PERSONAL' || viewMode === 'COMPANY' ? (
             <>
               {/* New Folder Button with Neutral Icon */}
               <Button
@@ -506,7 +536,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                 onChange={handleFileUpload}
               />
             </>
-          )}
+          ) : null}
         </div>
       </div>
 
