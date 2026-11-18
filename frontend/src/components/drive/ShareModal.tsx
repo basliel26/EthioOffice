@@ -47,7 +47,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
   const [linkAccessType, setLinkAccessType] = useState<'VIEW_ONLY' | 'ALLOW_DOWNLOAD' | 'UPLOAD_DROPBOX'>('ALLOW_DOWNLOAD');
   const [requirePassword, setRequirePassword] = useState(false);
   const [linkPassword, setLinkPassword] = useState('');
-  const [maxDownloads, setMaxDownloads] = useState<number | undefined>(undefined);
+  const [maxDownloads] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (!isOpen || !file) return;
@@ -68,7 +68,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
       setInternalShares(shares);
       setPublicLinks(links);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'የማጋራት መረጃዎችን መጫን አልተቻለም';
+      const msg = err instanceof Error ? err.message : 'Failed to load share settings';
       setError(msg);
     } finally {
       setIsLoading(false);
@@ -98,7 +98,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
       setSelectedUserId('');
       await loadShares();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'ማጋራት አልተሳካም';
+      const msg = err instanceof Error ? err.message : 'Failed to create internal share';
       setError(msg);
     } finally {
       setIsLoading(false);
@@ -109,9 +109,9 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
     if (!file) return;
     try {
       await sharesApi.revokeShare(shareId);
-      setInternalShares((prev) => prev.filter((s) => s.id !== shareId));
+      await loadShares();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'ፍቃድ ማንሳት አልተቻለም';
+      const msg = err instanceof Error ? err.message : 'Failed to revoke access';
       setError(msg);
     }
   };
@@ -125,15 +125,14 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
     try {
       await sharesApi.createPublicLink(file.id, {
         access_type: linkAccessType,
-        password: requirePassword && linkPassword.trim() ? linkPassword.trim() : undefined,
-        max_downloads: maxDownloads ? Number(maxDownloads) : undefined,
+        password: requirePassword && linkPassword ? linkPassword : undefined,
+        max_downloads: maxDownloads,
       });
       setLinkPassword('');
       setRequirePassword(false);
-      setMaxDownloads(undefined);
       await loadShares();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'የውጭ አገናኝ መፍጠር አልተቻለም';
+      const msg = err instanceof Error ? err.message : 'Failed to create public link';
       setError(msg);
     } finally {
       setIsLoading(false);
@@ -141,20 +140,23 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
   };
 
   const handleRevokePublicLink = async (linkId: string) => {
+    if (!file) return;
     try {
       await sharesApi.revokePublicLink(linkId);
-      setPublicLinks((prev) => prev.filter((l) => l.id !== linkId));
+      await loadShares();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'አገናኝ ማንሳት አልተቻለም';
+      const msg = err instanceof Error ? err.message : 'Failed to revoke public link';
       setError(msg);
     }
   };
 
   const handleCopyLink = (token: string, accessType: string) => {
     const origin = window.location.origin;
-    const path = accessType === 'UPLOAD_DROPBOX' ? `/dropbox/${token}` : `/share/${token}`;
-    const fullUrl = `${origin}${path}`;
-    navigator.clipboard.writeText(fullUrl);
+    const url = accessType === 'UPLOAD_DROPBOX' 
+      ? `${origin}/dropbox/${token}` 
+      : `${origin}/share/${token}`;
+    
+    navigator.clipboard.writeText(url);
     setCopiedToken(token);
     setTimeout(() => setCopiedToken(null), 2500);
   };
@@ -165,7 +167,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`ሰነድ አጋራ (Share): ${file.name}`}
+      title={`Share: ${file.name}`}
       maxWidth="xl"
     >
       <div className="space-y-5">
@@ -176,13 +178,13 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
           items={[
             {
               id: 'internal',
-              label: 'የውስጥ ሰራተኞች (Internal Colleagues)',
+              label: 'Internal Colleagues',
               icon: <Users className="w-3.5 h-3.5" />,
               count: internalShares.length,
             },
             {
               id: 'public',
-              label: 'የውጭ አገናኝ (Public Link)',
+              label: 'Public Link',
               icon: <Link2 className="w-3.5 h-3.5" />,
               count: publicLinks.length,
             },
@@ -190,7 +192,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
         />
 
         {error && (
-          <div className="flex items-center gap-2 p-3 bg-red-50 text-red-700 text-xs rounded-lg">
+          <div className="flex items-center gap-2 p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -199,18 +201,18 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
         {/* Tab 1: Internal Users Sharing */}
         {activeTab === 'internal' && (
           <div className="space-y-5">
-            <form onSubmit={handleCreateInternalShare} className="space-y-3 p-3.5 bg-zinc-50/70 rounded-xl">
-              <label className="block text-xs font-medium text-zinc-700">
-                ሰራተኛ ይምረጡ (Select Colleague)
+            <form onSubmit={handleCreateInternalShare} className="space-y-3 p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl">
+              <label className="block text-xs font-bold text-slate-700">
+                Select Colleague
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <select
                   value={selectedUserId}
                   onChange={(e) => setSelectedUserId(e.target.value)}
-                  className="sm:col-span-2 text-xs bg-white px-3 py-2 border border-zinc-200/80 rounded-lg text-zinc-800 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="sm:col-span-2 text-xs bg-white px-3 py-2 border border-slate-200/80 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
                   required
                 >
-                  <option value="">ሰራተኛ ይምረጡ...</option>
+                  <option value="">Select colleague...</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.full_name} ({u.email}) - {u.role}
@@ -221,10 +223,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
                 <select
                   value={permission}
                   onChange={(e) => setPermission(e.target.value as 'VIEWER' | 'EDITOR')}
-                  className="text-xs bg-white px-3 py-2 border border-zinc-200/80 rounded-lg text-zinc-800 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="text-xs bg-white px-3 py-2 border border-slate-200/80 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 font-medium"
                 >
-                  <option value="VIEWER">ማየት ብቻ (Viewer)</option>
-                  <option value="EDITOR">ማስተካከል (Editor)</option>
+                  <option value="VIEWER">Viewer</option>
+                  <option value="EDITOR">Editor</option>
                 </select>
               </div>
 
@@ -237,48 +239,48 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
                   disabled={!selectedUserId}
                   leftIcon={<Users className="w-3.5 h-3.5" />}
                 >
-                  አጋራ (Grant Access)
+                  Grant Access
                 </Button>
               </div>
             </form>
 
             {/* List of active internal shares */}
             <div className="space-y-2">
-              <h4 className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                የተጋሩ ሰራተኞች (Shared Colleagues)
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Shared Colleagues
               </h4>
 
               {internalShares.length === 0 ? (
-                <p className="text-xs text-zinc-400 py-3 text-center">
-                  ይህ ሰነድ እስካሁን ለማንም አልተጋራም (No active internal shares)
+                <p className="text-xs text-slate-400 py-4 text-center">
+                  This item is not shared with any colleagues yet.
                 </p>
               ) : (
-                <div className="divide-y divide-zinc-100 rounded-lg border border-zinc-100">
+                <div className="divide-y divide-slate-100 rounded-xl border border-slate-200/80 overflow-hidden bg-white">
                   {internalShares.map((s) => (
                     <div key={s.id} className="flex items-center justify-between p-3 text-xs">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-full bg-zinc-100 flex items-center justify-center font-medium text-zinc-600 text-xs">
+                        <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-xs border border-blue-100">
                           {(s.target_user_name || 'U').charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-medium text-zinc-800">
+                          <p className="font-bold text-slate-900">
                             {s.target_user_name || s.target_department_name || 'Unknown'}
                           </p>
-                          <p className="text-[10px] text-zinc-400">
-                            የተጋራው በ: {s.shared_by_name}
+                          <p className="text-[10px] text-slate-400">
+                            Shared by {s.shared_by_name}
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2">
                         <Badge variant={s.permission === 'EDITOR' ? 'success' : 'neutral'}>
-                          {s.permission === 'EDITOR' ? 'አዘጋጅ (Editor)' : 'ተመልካች (Viewer)'}
+                          {s.permission === 'EDITOR' ? 'Editor' : 'Viewer'}
                         </Badge>
                         <button
                           type="button"
                           onClick={() => handleRevokeInternalShare(s.id)}
-                          className="p-1 text-zinc-400 hover:text-red-600 rounded transition-colors"
-                          title="ፍቃድ አንሳ (Revoke)"
+                          className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition-colors"
+                          title="Revoke access"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -294,68 +296,68 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
         {/* Tab 2: Public Links Sharing */}
         {activeTab === 'public' && (
           <div className="space-y-5">
-            <form onSubmit={handleCreatePublicLink} className="space-y-3.5 p-3.5 bg-zinc-50/70 rounded-xl">
+            <form onSubmit={handleCreatePublicLink} className="space-y-3.5 p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setLinkAccessType('ALLOW_DOWNLOAD')}
-                  className={`p-2.5 text-left rounded-lg text-xs transition-all border ${
+                  className={`p-2.5 text-left rounded-xl text-xs transition-all border ${
                     linkAccessType === 'ALLOW_DOWNLOAD'
-                      ? 'bg-white border-zinc-900 shadow-xs text-zinc-900'
-                      : 'bg-white/50 border-zinc-200/70 text-zinc-600 hover:bg-white'
+                      ? 'bg-white border-blue-600 shadow-2xs text-blue-900 font-semibold'
+                      : 'bg-white/60 border-slate-200/70 text-slate-600 hover:bg-white'
                   }`}
                 >
-                  <div className="flex items-center gap-1.5 font-medium mb-1">
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>አውርድ (Download)</span>
+                  <div className="flex items-center gap-1.5 font-bold mb-1">
+                    <Eye className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Download</span>
                   </div>
-                  <p className="text-[10px] text-zinc-400">ማውረድና ማየት ይፈቀዳል</p>
+                  <p className="text-[10px] text-slate-400 font-normal">Allow viewing and downloading</p>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setLinkAccessType('VIEW_ONLY')}
-                  className={`p-2.5 text-left rounded-lg text-xs transition-all border ${
+                  className={`p-2.5 text-left rounded-xl text-xs transition-all border ${
                     linkAccessType === 'VIEW_ONLY'
-                      ? 'bg-white border-zinc-900 shadow-xs text-zinc-900'
-                      : 'bg-white/50 border-zinc-200/70 text-zinc-600 hover:bg-white'
+                      ? 'bg-white border-blue-600 shadow-2xs text-blue-900 font-semibold'
+                      : 'bg-white/60 border-slate-200/70 text-slate-600 hover:bg-white'
                   }`}
                 >
-                  <div className="flex items-center gap-1.5 font-medium mb-1">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>ማየት ብቻ (View Only)</span>
+                  <div className="flex items-center gap-1.5 font-bold mb-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                    <span>View Only</span>
                   </div>
-                  <p className="text-[10px] text-zinc-400">ያለ ማውረድ መብት ብቻ</p>
+                  <p className="text-[10px] text-slate-400 font-normal">Preview without download</p>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setLinkAccessType('UPLOAD_DROPBOX')}
-                  className={`p-2.5 text-left rounded-lg text-xs transition-all border ${
+                  className={`p-2.5 text-left rounded-xl text-xs transition-all border ${
                     linkAccessType === 'UPLOAD_DROPBOX'
-                      ? 'bg-white border-zinc-900 shadow-xs text-zinc-900'
-                      : 'bg-white/50 border-zinc-200/70 text-zinc-600 hover:bg-white'
+                      ? 'bg-white border-blue-600 shadow-2xs text-blue-900 font-semibold'
+                      : 'bg-white/60 border-slate-200/70 text-slate-600 hover:bg-white'
                   }`}
                 >
-                  <div className="flex items-center gap-1.5 font-medium mb-1">
-                    <UploadCloud className="w-3.5 h-3.5" />
-                    <span>ድሮፕ ቦክስ (Dropbox)</span>
+                  <div className="flex items-center gap-1.5 font-bold mb-1">
+                    <UploadCloud className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Dropbox</span>
                   </div>
-                  <p className="text-[10px] text-zinc-400">ፋይሎችን እንዲያስቀምጡ</p>
+                  <p className="text-[10px] text-slate-400 font-normal">Allow others to upload files</p>
                 </button>
               </div>
 
               {/* Password & Security options */}
-              <div className="space-y-2 pt-1 border-t border-zinc-200/50">
+              <div className="space-y-2 pt-2 border-t border-slate-200/60">
                 <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 text-xs text-zinc-700 cursor-pointer">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={requirePassword}
                       onChange={(e) => setRequirePassword(e.target.checked)}
-                      className="rounded text-zinc-900 focus:ring-zinc-500 w-3.5 h-3.5"
+                      className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
                     />
-                    <span>በይለፍ ቃል ጠብቅ (Require Password)</span>
+                    <span>Require Password</span>
                   </label>
                 </div>
 
@@ -363,10 +365,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
                   <div className="pt-1">
                     <Input
                       type="password"
-                      placeholder="የይለፍ ቃል (Password)..."
+                      placeholder="Access password..."
                       value={linkPassword}
                       onChange={(e) => setLinkPassword(e.target.value)}
-                      leftIcon={<Lock className="w-3.5 h-3.5" />}
+                      leftIcon={<Lock className="w-3.5 h-3.5 text-slate-400" />}
                       required={requirePassword}
                     />
                   </div>
@@ -381,41 +383,41 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
                   isLoading={isLoading}
                   leftIcon={<Link2 className="w-3.5 h-3.5" />}
                 >
-                  አገናኝ ፍጠር (Generate Public Link)
+                  Generate Public Link
                 </Button>
               </div>
             </form>
 
             {/* List of active public links */}
             <div className="space-y-2">
-              <h4 className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                ንቁ የውጭ አገናኞች (Active Public Links)
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Active Public Links
               </h4>
 
               {publicLinks.length === 0 ? (
-                <p className="text-xs text-zinc-400 py-3 text-center">
-                  ምንም ንቁ የውጭ አገናኝ የለም (No active public links)
+                <p className="text-xs text-slate-400 py-4 text-center">
+                  No active public links for this item.
                 </p>
               ) : (
-                <div className="divide-y divide-zinc-100 rounded-lg border border-zinc-100">
+                <div className="divide-y divide-slate-100 rounded-xl border border-slate-200/80 overflow-hidden bg-white">
                   {publicLinks.map((link) => (
                     <div key={link.id} className="p-3 text-xs flex items-center justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <Badge variant="neutral">
-                            {link.access_type === 'UPLOAD_DROPBOX' ? 'ድሮፕ ቦክስ (Dropbox)' : link.access_type}
+                            {link.access_type === 'UPLOAD_DROPBOX' ? 'Dropbox' : link.access_type}
                           </Badge>
                           {link.is_password_protected && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded">
+                            <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/70 font-medium">
                               <Lock className="w-2.5 h-2.5" />
-                              የይለፍ ቃል አለው
+                              Password Protected
                             </span>
                           )}
-                          <span className="text-[10px] text-zinc-400">
-                            የወረደበት ብዛት: {link.download_count}
+                          <span className="text-[10px] text-slate-400">
+                            Downloads: {link.download_count}
                           </span>
                         </div>
-                        <p className="text-[11px] font-mono text-zinc-500 truncate">
+                        <p className="text-[11px] font-mono text-slate-500 truncate">
                           /share/{link.token}
                         </p>
                       </div>
@@ -434,14 +436,14 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
                             )
                           }
                         >
-                          {copiedToken === link.token ? 'ተቀድቷል' : 'ቅዳ (Copy)'}
+                          {copiedToken === link.token ? 'Copied!' : 'Copy Link'}
                         </Button>
 
                         <button
                           type="button"
                           onClick={() => handleRevokePublicLink(link.id)}
-                          className="p-1.5 text-zinc-400 hover:text-red-600 rounded transition-colors"
-                          title="አገናኝ አንሳ (Revoke Link)"
+                          className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition-colors"
+                          title="Revoke Link"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -454,9 +456,9 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, file })
           </div>
         )}
 
-        <div className="flex justify-end pt-2 border-t border-zinc-100">
+        <div className="flex justify-end pt-2 border-t border-slate-100">
           <Button variant="ghost" size="sm" onClick={onClose}>
-            ዝጋ (Done)
+            Done
           </Button>
         </div>
       </div>
