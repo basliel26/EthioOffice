@@ -145,12 +145,29 @@ export const AppShell: React.FC = () => {
             </button>
           </div>
 
-          {/* Navigation Items */}
-          <div className="p-3 space-y-6 overflow-y-auto max-h-[calc(100vh-220px)]">
-            {/* Drive Section */}
+          {/* Navigation Items (Windows Explorer Organization) */}
+          <div className="p-3 space-y-5 overflow-y-auto max-h-[calc(100vh-220px)]">
+            {/* Quick Access Section */}
             <div>
               <p className={`px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5 ${isCollapsed ? 'md:hidden' : ''}`}>
-                Drive & Files
+                Quick Access
+              </p>
+              <nav className="space-y-1">
+                <NavLink to="/drive/starred" className={navItemClass} title="Starred">
+                  <Star className="w-[18px] h-[18px] shrink-0" />
+                  <span className={isCollapsed ? 'md:hidden' : ''}>Starred</span>
+                </NavLink>
+                <NavLink to="/drive/recent" className={navItemClass} title="Recent">
+                  <Clock className="w-[18px] h-[18px] shrink-0" />
+                  <span className={isCollapsed ? 'md:hidden' : ''}>Recent</span>
+                </NavLink>
+              </nav>
+            </div>
+
+            {/* Drives & Locations Section */}
+            <div>
+              <p className={`px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5 ${isCollapsed ? 'md:hidden' : ''}`}>
+                Drives & Locations
               </p>
               <nav className="space-y-1">
                 <NavLink to="/drive/personal" className={navItemClass} title="Personal Drive">
@@ -165,17 +182,9 @@ export const AppShell: React.FC = () => {
                   <Share2 className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Shared with me</span>
                 </NavLink>
-                <NavLink to="/drive/starred" className={navItemClass} title="Starred">
-                  <Star className="w-[18px] h-[18px] shrink-0" />
-                  <span className={isCollapsed ? 'md:hidden' : ''}>Starred</span>
-                </NavLink>
-                <NavLink to="/drive/recent" className={navItemClass} title="Recent">
-                  <Clock className="w-[18px] h-[18px] shrink-0" />
-                  <span className={isCollapsed ? 'md:hidden' : ''}>Recent</span>
-                </NavLink>
-                <NavLink to="/drive/trash" className={navItemClass} title="Trash">
+                <NavLink to="/drive/trash" className={navItemClass} title="Recycle Bin">
                   <Trash2 className="w-[18px] h-[18px] shrink-0" />
-                  <span className={isCollapsed ? 'md:hidden' : ''}>Trash</span>
+                  <span className={isCollapsed ? 'md:hidden' : ''}>Recycle Bin</span>
                 </NavLink>
               </nav>
             </div>
