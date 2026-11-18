@@ -58,7 +58,7 @@ export const DualCalendarDropdown: React.FC = () => {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-semibold text-slate-700 bg-blue-50/80 hover:bg-blue-100/70 border border-blue-200/70 px-2 sm:px-3 py-1.5 rounded-xl transition-all shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-300 shrink-0"
+        className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-semibold text-slate-700 bg-blue-50/80 hover:bg-blue-100/70 px-2 sm:px-3 py-1.5 rounded-xl transition-all shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-300 shrink-0"
         title="Click to view dual Ethiopian & Gregorian Calendar"
       >
         <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 shrink-0" />
