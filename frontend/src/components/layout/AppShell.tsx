@@ -80,6 +80,7 @@ export const AppShell: React.FC = () => {
     }`;
 
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+  const canViewStorage = isAdmin || user?.role === 'MANAGER';
 
   const formatBytes = (bytes: number) => {
     if (!bytes || bytes === 0) return '0 B';
@@ -229,33 +230,35 @@ export const AppShell: React.FC = () => {
 
         {/* Bottom Section: Storage Quota Meter + User Card */}
         <div className="p-3 border-t border-slate-100 bg-white space-y-2.5">
-          {/* Storage Quota Bar */}
-          <div className={isCollapsed ? 'hidden md:block' : ''}>
-            {isCollapsed ? (
-              <div className="flex justify-center py-1" title={`Storage: ${percentageUsed}% used`}>
-                <Database className="w-4 h-4 text-blue-600" />
-              </div>
-            ) : (
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-semibold text-slate-700 flex items-center gap-1.5">
-                    <Database className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Storage</span>
-                  </span>
-                  <span className="text-slate-500 font-medium">{percentageUsed}%</span>
+          {/* Storage Quota Bar (Restricted to Company Admin, Super Admin, and Department Managers) */}
+          {canViewStorage && (
+            <div className={isCollapsed ? 'hidden md:block' : ''}>
+              {isCollapsed ? (
+                <div className="flex justify-center py-1" title={`Storage: ${percentageUsed}% used`}>
+                  <Database className="w-4 h-4 text-blue-600" />
                 </div>
-                <div className="w-full h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-600 rounded-full transition-all duration-300"
-                    style={{ width: `${percentageUsed}%` }}
-                  />
+              ) : (
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                      <Database className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Storage</span>
+                    </span>
+                    <span className="text-slate-500 font-medium">{percentageUsed}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                      style={{ width: `${percentageUsed}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    {formatBytes(usedBytes)} of {formatBytes(quotaBytes)} used
+                  </p>
                 </div>
-                <p className="text-[10px] text-slate-400">
-                  {formatBytes(usedBytes)} of {formatBytes(quotaBytes)} used
-                </p>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* User Profile Card */}
           <div
