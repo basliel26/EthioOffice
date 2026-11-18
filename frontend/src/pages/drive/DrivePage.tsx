@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Folder,
+  FolderPlus,
   FileText,
-  Plus,
   Upload,
   Trash2,
   RotateCcw,
@@ -17,7 +17,6 @@ import {
   Search,
   Check,
   Share2,
-  Home,
   FileSpreadsheet,
   Presentation,
   FilePlus2,
@@ -287,24 +286,22 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   });
 
   return (
-    <div className="space-y-4 select-none font-sans">
-      {/* Top Action & Breadcrumbs Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
-        {/* Windows Explorer Style Address / Breadcrumbs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+    <div className="space-y-3 select-none font-sans">
+      {/* Tier 1: Location / URI Path Bar (Windows Explorer Style) */}
+      <div className="flex items-center justify-between py-0.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto text-sm">
           {viewMode !== 'STARRED' && viewMode !== 'RECENT' ? (
             breadcrumbs.map((b, idx) => (
               <React.Fragment key={b.name + idx}>
-                {idx > 0 && <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
+                {idx > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
                 <button
                   onClick={() => handleNavigateBreadcrumb(idx)}
-                  className={`hover:text-blue-600 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                  className={`transition-colors whitespace-nowrap ${
                     idx === breadcrumbs.length - 1
-                      ? 'text-slate-900 font-extrabold text-base sm:text-lg tracking-tight'
-                      : 'text-slate-500 font-medium text-sm sm:text-base'
+                      ? 'text-slate-800 font-medium cursor-default'
+                      : 'text-slate-500 hover:text-slate-900 font-normal'
                   }`}
                 >
-                  {idx === 0 && <Home className="w-4 h-4 text-blue-600 shrink-0" />}
                   <span>{b.name}</span>
                 </button>
               </React.Fragment>
@@ -313,36 +310,24 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
             <div className="flex items-center gap-2">
               {viewMode === 'STARRED' ? (
                 <>
-                  <Star className="w-5 h-5 text-amber-500 fill-amber-400 shrink-0" />
-                  <span className="font-extrabold text-slate-900 text-base sm:text-lg tracking-tight">
-                    Starred Documents
-                  </span>
+                  <Star className="w-4 h-4 text-amber-500 fill-amber-400 shrink-0" />
+                  <span className="text-slate-800 font-medium">Starred Documents</span>
                 </>
               ) : (
                 <>
-                  <Clock className="w-5 h-5 text-blue-600 shrink-0" />
-                  <span className="font-extrabold text-slate-900 text-base sm:text-lg tracking-tight">
-                    Recent Activity
-                  </span>
+                  <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span className="text-slate-800 font-medium">Recent Activity</span>
                 </>
               )}
             </div>
           )}
         </div>
+      </div>
 
-        {/* Action Buttons & In-Folder Search */}
+      {/* Tier 2: Action Toolbar / Command Ribbon */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
+        {/* Left: Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
-          {viewMode !== 'TRASH' && (
-            <div className="w-40 sm:w-48 hidden md:block">
-              <Input
-                placeholder="Search in folder..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                leftIcon={<Search className="w-3.5 h-3.5 text-slate-400" />}
-              />
-            </div>
-          )}
-
           {viewMode === 'TRASH' ? (
             <Button
               variant="danger"
@@ -355,17 +340,17 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
             </Button>
           ) : (
             <>
-              {/* New Folder Button */}
+              {/* New Folder Button with FolderPlus Icon */}
               <Button
                 variant="subtle"
                 size="sm"
-                leftIcon={<Plus className="w-4 h-4" />}
+                leftIcon={<FolderPlus className="w-4 h-4 text-amber-500" />}
                 onClick={() => setShowFolderModal(true)}
               >
                 New Folder
               </Button>
 
-              {/* New Document File Button */}
+              {/* New Document Button with FilePlus2 Icon */}
               <Button
                 variant="subtle"
                 size="sm"
@@ -386,7 +371,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                 leftIcon={<Upload className="w-4 h-4" />}
                 onClick={() => fileInputRef.current?.click()}
               >
-                Upload
+                Upload File
               </Button>
               <input
                 ref={fileInputRef}
@@ -397,6 +382,18 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
             </>
           )}
         </div>
+
+        {/* Right: In-Folder Search */}
+        {viewMode !== 'TRASH' && (
+          <div className="w-full sm:w-56 md:w-64">
+            <Input
+              placeholder="Search in folder..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              leftIcon={<Search className="w-3.5 h-3.5 text-slate-400" />}
+            />
+          </div>
+        )}
       </div>
 
       {/* Filter and Tag Chips Row */}
