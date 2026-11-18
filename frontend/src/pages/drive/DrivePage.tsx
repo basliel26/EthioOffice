@@ -544,35 +544,34 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       {/* Files & Folders Content List */}
       <div
         onContextMenu={openCanvasContextMenu}
-        className="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden flex flex-col min-h-[480px]"
+        className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-2 sm:p-3"
       >
         {isLoading ? (
-          <div className="py-24 text-center text-xs font-medium text-slate-400">Loading files...</div>
+          <div className="py-16 text-center text-xs font-medium text-slate-400">Loading files...</div>
         ) : filteredFiles.length === 0 ? (
           <div
             onContextMenu={openCanvasContextMenu}
-            className="flex-1 flex flex-col items-center justify-center py-28 space-y-2 cursor-default select-none"
+            className="flex flex-col items-center justify-center py-20 space-y-2 cursor-default select-none"
           >
             <Folder className="w-10 h-10 text-slate-300 mx-auto" />
             <p className="text-sm font-bold text-slate-800">This folder is empty</p>
             <p className="text-xs text-slate-400">Upload a document, create a new file or right-click anywhere to get started.</p>
           </div>
         ) : (
-          <>
-            <div className="divide-y divide-slate-100">
-              {filteredFiles.map((file) => (
-                <div
-                  key={file.id}
-                  onContextMenu={(e) => openRowContextMenu(e, file)}
-                  onDoubleClick={() => {
-                    if (file.is_folder) {
-                      handleOpenFolder(file);
-                    } else {
-                      navigate(`/editor/${file.id}`);
-                    }
-                  }}
-                  className="flex items-center justify-between p-3.5 hover:bg-slate-50/80 transition-colors group cursor-pointer"
-                >
+          <div className="space-y-1 sm:space-y-1.5">
+            {filteredFiles.map((file) => (
+              <div
+                key={file.id}
+                onContextMenu={(e) => openRowContextMenu(e, file)}
+                onDoubleClick={() => {
+                  if (file.is_folder) {
+                    handleOpenFolder(file);
+                  } else {
+                    navigate(`/editor/${file.id}`);
+                  }
+                }}
+                className="flex items-center justify-between p-3 sm:px-4 rounded-xl border border-transparent hover:border-slate-200/70 hover:bg-slate-50/80 transition-all group cursor-pointer"
+              >
                   {/* Left: Star + Icon + Name + Tags */}
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     {viewMode !== 'TRASH' && (
@@ -810,15 +809,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                 </div>
               ))}
             </div>
-
-            {/* Empty canvas breathing area below files for right-clicking */}
-            <div
-              onContextMenu={openCanvasContextMenu}
-              className="flex-1 min-h-[160px] cursor-default"
-              title="Right-click here to create a new folder, document, or upload files"
-            />
-          </>
-        )}
+          )}
       </div>
 
       {/* 1. New Folder Modal */}
