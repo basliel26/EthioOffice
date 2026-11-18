@@ -20,7 +20,7 @@ class FolderCreate(BaseModel):
 
 
 class NewDocumentCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255)
+    name: Optional[str] = Field("New Document", max_length=255)
     doc_type: str = Field(..., pattern="^(docx|xlsx|pptx|txt)$")
     parent_id: Optional[uuid.UUID] = None
     department_id: Optional[uuid.UUID] = None

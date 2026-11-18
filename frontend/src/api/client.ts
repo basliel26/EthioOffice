@@ -150,7 +150,7 @@ export const filesApi = {
     return res.data;
   },
   createDocument: async (data: {
-    name: string;
+    name?: string;
     doc_type: 'docx' | 'xlsx' | 'pptx' | 'txt';
     drive_type?: 'PERSONAL' | 'COMPANY';
     parent_id?: string;

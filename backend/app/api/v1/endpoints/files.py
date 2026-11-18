@@ -149,7 +149,7 @@ def create_new_document(
     Creates a new native office document (.docx, .xlsx, .pptx, or .txt) ready for Euro-Office editing.
     """
     import io
-    name = payload.name.strip()
+    name = payload.name.strip() if payload.name and payload.name.strip() else "New Document"
     ext = payload.doc_type.lower().strip()
     if not ext.startswith("."):
         ext = f".{ext}"
@@ -157,6 +157,21 @@ def create_new_document(
         filename = f"{name}{ext}"
     else:
         filename = name
+
+    # Auto-resolve duplicates like Windows (e.g. "New Document (1).docx")
+    existing_names = set(
+        row[0] for row in db.query(FileItem.name).filter(
+            FileItem.organization_id == current_user.organization_id,
+            FileItem.parent_id == payload.parent_id,
+            FileItem.is_deleted == False,
+        ).all()
+    )
+    if filename in existing_names:
+        base_stem = filename[:-len(ext)]
+        counter = 1
+        while f"{base_stem} ({counter}){ext}" in existing_names:
+            counter += 1
+        filename = f"{base_stem} ({counter}){ext}"
 
     content_bytes = b""
     content_type = "text/plain"

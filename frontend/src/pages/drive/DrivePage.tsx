@@ -12,6 +12,7 @@ import {
   Clock,
   Tag as TagIcon,
   ChevronRight,
+  ChevronDown,
   Download,
   Edit2,
   Check,
@@ -75,7 +76,35 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   const [showEmptyTrashModal, setShowEmptyTrashModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
 
+  // Dropdown & Context Menu state
+  const [showNewDocMenu, setShowNewDocMenu] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const newDocMenuRef = useRef<HTMLDivElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (newDocMenuRef.current && !newDocMenuRef.current.contains(e.target as Node)) {
+        setShowNewDocMenu(false);
+      }
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowNewDocMenu(false);
+        setContextMenu(null);
+      }
+    };
+    window.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const documentTypeOptions = [
     {
@@ -180,6 +209,33 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       if (openInEditor) {
         navigate(`/editor/${created.id}`);
       }
+    } catch {
+      // ignore
+    } finally {
+      setIsCreatingDoc(false);
+    }
+  };
+
+  const handleQuickCreateDocument = async (docType: 'docx' | 'xlsx' | 'pptx' | 'txt') => {
+    setShowNewDocMenu(false);
+    setContextMenu(null);
+    setIsCreatingDoc(true);
+    try {
+      const driveType = viewMode === 'COMPANY' ? 'COMPANY' : 'PERSONAL';
+      const defaultNames: Record<string, string> = {
+        docx: 'New Document',
+        xlsx: 'New Spreadsheet',
+        pptx: 'New Presentation',
+        txt: 'New Text Document',
+      };
+      const created = await filesApi.createDocument({
+        name: defaultNames[docType],
+        doc_type: docType,
+        drive_type: driveType,
+        parent_id: currentFolderId || undefined,
+      });
+      await loadData();
+      navigate(`/editor/${created.id}`);
     } catch {
       // ignore
     } finally {
@@ -364,19 +420,45 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                 New Folder
               </Button>
 
-              {/* New Document Button with Neutral Icon */}
-              <Button
-                variant="subtle"
-                size="sm"
-                leftIcon={<FilePlus2 className="w-4 h-4 text-slate-600" />}
-                onClick={() => {
-                  setNewDocName('');
-                  setNewDocType('docx');
-                  setShowDocModal(true);
-                }}
-              >
-                New Document
-              </Button>
+              {/* New Document Button with Dropdown Menu */}
+              <div className="relative" ref={newDocMenuRef}>
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  leftIcon={<FilePlus2 className="w-4 h-4 text-slate-600" />}
+                  rightIcon={<ChevronDown className="w-3.5 h-3.5 text-slate-400 -mr-0.5" />}
+                  onClick={() => setShowNewDocMenu((prev) => !prev)}
+                  isLoading={isCreatingDoc}
+                >
+                  New Document
+                </Button>
+
+                {showNewDocMenu && (
+                  <div className="absolute right-0 top-full mt-1.5 w-60 rounded-xl bg-white shadow-xl border border-slate-200/90 py-1.5 z-40 animate-scale-up font-sans">
+                    <p className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Create Document
+                    </p>
+                    {documentTypeOptions.map((type) => (
+                      <button
+                        key={type.id}
+                        type="button"
+                        onClick={() => handleQuickCreateDocument(type.id)}
+                        className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-slate-50 transition-colors group cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {type.icon}
+                          <span className="text-xs font-medium text-slate-800 group-hover:text-blue-600 transition-colors truncate">
+                            {type.name}
+                          </span>
+                        </div>
+                        <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${type.badgeColor}`}>
+                          {type.extension}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* Upload File Button */}
               <Button
@@ -429,21 +511,32 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         </div>
       )}
 
-      {/* Files & Folders Content List */}
-      <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden">
+      {/* Files & Folders Content List (Supports Windows Right-Click Context Menu) */}
+      <div
+        onContextMenu={(e) => {
+          if (viewMode !== 'TRASH') {
+            e.preventDefault();
+            setContextMenu({ x: e.clientX, y: e.clientY });
+          }
+        }}
+        className="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden min-h-[360px]"
+      >
         {isLoading ? (
           <div className="py-20 text-center text-xs font-medium text-slate-400">Loading files...</div>
         ) : filteredFiles.length === 0 ? (
           <div className="py-20 text-center space-y-2">
             <Folder className="w-10 h-10 text-slate-300 mx-auto" />
             <p className="text-sm font-bold text-slate-800">This folder is empty</p>
-            <p className="text-xs text-slate-400">Upload a document or create a new file or folder to get started.</p>
+            <p className="text-xs text-slate-400">Upload a document, create a new file or right-click to get started.</p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
             {filteredFiles.map((file) => (
               <div
                 key={file.id}
+                onContextMenu={(e) => {
+                  e.stopPropagation();
+                }}
                 onDoubleClick={() => {
                   if (file.is_folder) {
                     handleOpenFolder(file);
@@ -836,6 +929,65 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         }}
         file={targetFile}
       />
+
+      {/* 7. Windows Explorer Style Right-Click Context Menu */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
+          className="fixed z-50 w-56 rounded-xl bg-white shadow-2xl border border-slate-200/90 py-1.5 animate-scale-up font-sans select-none"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setContextMenu(null);
+              setShowFolderModal(true);
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+          >
+            <FolderPlus className="w-4 h-4 text-slate-600 shrink-0" />
+            <span>New Folder</span>
+          </button>
+
+          <div className="border-t border-slate-100 my-1" />
+
+          <p className="px-3 py-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            New Document
+          </p>
+          {documentTypeOptions.map((type) => (
+            <button
+              key={type.id}
+              type="button"
+              onClick={() => handleQuickCreateDocument(type.id)}
+              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-slate-50 transition-colors group cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                {type.icon}
+                <span className="text-xs font-medium text-slate-800 group-hover:text-blue-600 transition-colors truncate">
+                  {type.name}
+                </span>
+              </div>
+              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${type.badgeColor}`}>
+                {type.extension}
+              </span>
+            </button>
+          ))}
+
+          <div className="border-t border-slate-100 my-1" />
+
+          <button
+            type="button"
+            onClick={() => {
+              setContextMenu(null);
+              fileInputRef.current?.click();
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+          >
+            <Upload className="w-4 h-4 text-slate-600 shrink-0" />
+            <span>Upload File</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };
