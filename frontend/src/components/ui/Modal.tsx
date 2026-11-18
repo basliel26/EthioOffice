@@ -4,7 +4,8 @@ import { X } from 'lucide-react';
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  title?: string;
+  title?: React.ReactNode;
+  icon?: React.ReactNode;
   description?: string;
   children: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
@@ -14,6 +15,7 @@ export const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
   title,
+  icon,
   description,
   children,
   maxWidth = 'md',
@@ -47,15 +49,22 @@ export const Modal: React.FC<ModalProps> = ({
       />
 
       {/* Clean borderless dialog container */}
-      <div className={`relative w-full ${maxWidths[maxWidth]} rounded-2xl bg-white shadow-2xl p-6 transition-all duration-200 z-10 animate-scale-up`}>
+      <div className={`relative w-full ${maxWidths[maxWidth]} rounded-2xl bg-white shadow-2xl p-6 transition-all duration-200 z-10 animate-scale-up font-sans`}>
         <div className="flex items-start justify-between mb-4">
-          <div>
-            {title && <h3 className="text-base font-semibold text-zinc-900">{title}</h3>}
-            {description && <p className="mt-1 text-xs text-zinc-500">{description}</p>}
+          <div className="flex items-center gap-3">
+            {icon && (
+              <div className="w-10 h-10 rounded-xl bg-slate-100/90 border border-slate-200/60 flex items-center justify-center text-slate-700 shrink-0">
+                {icon}
+              </div>
+            )}
+            <div>
+              {title && <h3 className="text-base font-bold text-slate-900">{title}</h3>}
+              {description && <p className="mt-0.5 text-xs text-slate-500 font-medium">{description}</p>}
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-700 p-1 rounded-lg hover:bg-zinc-100 transition-colors"
+            className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors shrink-0"
           >
             <X className="w-4 h-4" />
           </button>

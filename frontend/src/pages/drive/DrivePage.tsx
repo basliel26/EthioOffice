@@ -620,13 +620,16 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       <Modal
         isOpen={showFolderModal}
         onClose={() => setShowFolderModal(false)}
+        icon={<FolderPlus className="w-5 h-5 text-slate-700" />}
         title="Create New Folder"
+        description={`Location: ${breadcrumbs.map((b) => b.name).join(' / ')}`}
       >
         <form onSubmit={handleCreateFolder} className="space-y-4">
           <Input
-            placeholder="Folder name"
+            placeholder="Folder name (e.g. Finance, Contracts, Projects)"
             value={newFolderName}
             onChange={(e) => setNewFolderName(e.target.value)}
+            leftIcon={<Folder className="w-4 h-4 text-slate-400" />}
             required
             autoFocus
           />
@@ -645,7 +648,9 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       <Modal
         isOpen={showDocModal}
         onClose={() => setShowDocModal(false)}
+        icon={<FilePlus2 className="w-5 h-5 text-slate-700" />}
         title="Create New Document"
+        description={`Location: ${breadcrumbs.map((b) => b.name).join(' / ')}`}
         maxWidth="lg"
       >
         <form onSubmit={(e) => handleCreateDocument(e, false)} className="space-y-4">
