@@ -298,17 +298,18 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   });
 
   return (
-    <div className="space-y-2 select-none font-sans">
-      {/* Tier 1: Location / URI Path Bar (Windows Explorer Style) */}
-      <div className="flex items-center justify-between pt-0 pb-0.5">
-        <div className="flex items-center gap-1.5 overflow-x-auto">
+    <div className="space-y-3 select-none font-sans">
+      {/* Location Breadcrumbs & Action Buttons on the Same Line */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2.5 border-b border-slate-200/80">
+        {/* Left: Location / Breadcrumbs (Same size as navbar title, no bold) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto min-w-0">
           {viewMode !== 'STARRED' && viewMode !== 'RECENT' ? (
             breadcrumbs.map((b, idx) => (
               <React.Fragment key={b.name + idx}>
-                {idx > 0 && <ChevronRight className="w-5 h-5 text-slate-300 shrink-0" />}
+                {idx > 0 && <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />}
                 <button
                   onClick={() => handleNavigateBreadcrumb(idx)}
-                  className={`transition-colors whitespace-nowrap text-xl sm:text-2xl font-normal ${
+                  className={`transition-colors whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-xl font-normal ${
                     idx === breadcrumbs.length - 1
                       ? 'text-slate-800 cursor-default'
                       : 'text-slate-400 hover:text-slate-700'
@@ -319,78 +320,82 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
               </React.Fragment>
             ))
           ) : (
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2">
               {viewMode === 'STARRED' ? (
                 <>
-                  <Star className="w-5 h-5 text-amber-500 fill-amber-400 shrink-0" />
-                  <span className="text-slate-800 text-xl sm:text-2xl font-normal">Starred Documents</span>
+                  <Star className="w-4 h-4 text-amber-500 fill-amber-400 shrink-0" />
+                  <span className="text-slate-800 text-sm sm:text-base md:text-lg lg:text-xl font-normal">
+                    Starred Documents
+                  </span>
                 </>
               ) : (
                 <>
-                  <Clock className="w-5 h-5 text-blue-600 shrink-0" />
-                  <span className="text-slate-800 text-xl sm:text-2xl font-normal">Recent Activity</span>
+                  <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span className="text-slate-800 text-sm sm:text-base md:text-lg lg:text-xl font-normal">
+                    Recent Activity
+                  </span>
                 </>
               )}
             </div>
           )}
         </div>
-      </div>
 
-      {/* Tier 2: Action Toolbar / Command Ribbon (Buttons Aligned to Right) */}
-      <div className="flex items-center justify-end gap-2 pb-2.5 border-b border-slate-200/80">
-        {viewMode === 'TRASH' ? (
-          <Button
-            variant="danger"
-            size="sm"
-            leftIcon={<Trash2 className="w-4 h-4" />}
-            onClick={() => setShowEmptyTrashModal(true)}
-            disabled={files.length === 0}
-          >
-            Empty Recycle Bin
-          </Button>
-        ) : (
-          <>
-            {/* New Folder Button with Neutral Icon */}
+        {/* Right: Action Buttons (Aligned on the exact same line) */}
+        <div className="flex items-center justify-end gap-2 shrink-0">
+          {viewMode === 'TRASH' ? (
             <Button
-              variant="subtle"
+              variant="danger"
               size="sm"
-              leftIcon={<FolderPlus className="w-4 h-4 text-slate-600" />}
-              onClick={() => setShowFolderModal(true)}
+              leftIcon={<Trash2 className="w-4 h-4" />}
+              onClick={() => setShowEmptyTrashModal(true)}
+              disabled={files.length === 0}
             >
-              New Folder
+              Empty Recycle Bin
             </Button>
+          ) : (
+            <>
+              {/* New Folder Button with Neutral Icon */}
+              <Button
+                variant="subtle"
+                size="sm"
+                leftIcon={<FolderPlus className="w-4 h-4 text-slate-600" />}
+                onClick={() => setShowFolderModal(true)}
+              >
+                New Folder
+              </Button>
 
-            {/* New Document Button with Neutral Icon */}
-            <Button
-              variant="subtle"
-              size="sm"
-              leftIcon={<FilePlus2 className="w-4 h-4 text-slate-600" />}
-              onClick={() => {
-                setNewDocName('');
-                setNewDocType('docx');
-                setShowDocModal(true);
-              }}
-            >
-              New Document
-            </Button>
+              {/* New Document Button with Neutral Icon */}
+              <Button
+                variant="subtle"
+                size="sm"
+                leftIcon={<FilePlus2 className="w-4 h-4 text-slate-600" />}
+                onClick={() => {
+                  setNewDocName('');
+                  setNewDocType('docx');
+                  setShowDocModal(true);
+                }}
+              >
+                New Document
+              </Button>
 
-            {/* Upload File Button */}
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<Upload className="w-4 h-4" />}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              Upload File
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={handleFileUpload}
-            />
-          </>
-        )}
+              {/* Upload File Button */}
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Upload className="w-4 h-4" />}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Upload File
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+            </>
+          )}
+        </div>
       </div>
 
       {/* Filter and Tag Chips Row */}
