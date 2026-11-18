@@ -74,7 +74,7 @@ export const NotificationDropdown: React.FC = () => {
           <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white shadow-xl border border-zinc-200/70 p-4 z-50 animate-scale-up">
             <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
               <div className="flex items-center gap-2">
-                <h4 className="text-sm font-semibold text-zinc-900">ማሳወቂያዎች (Notifications)</h4>
+                <h4 className="text-sm font-bold text-slate-900">Notifications</h4>
                 {unreadCount > 0 && (
                   <Badge variant="danger" size="sm">
                     {unreadCount}
@@ -84,9 +84,9 @@ export const NotificationDropdown: React.FC = () => {
               {unreadCount > 0 && (
                 <button
                   onClick={handleMarkAllAsRead}
-                  className="text-[11px] text-zinc-500 hover:text-zinc-900 transition-colors"
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
                 >
-                  ሁሉንም አንብብ (Mark all read)
+                  Mark all as read
                 </button>
               )}
             </div>

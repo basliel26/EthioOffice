@@ -59,10 +59,10 @@ export const RegisterOrgPage: React.FC = () => {
       if (err && typeof err === 'object' && 'response' in err) {
         const resp = (err as { response?: { data?: { detail?: string | { message?: string } } } }).response;
         const detail = resp?.data?.detail;
-        const msg = typeof detail === 'string' ? detail : detail?.message || 'ድርጅቱን መመዝገብ አልተቻለም (Failed to register organization)';
+        const msg = typeof detail === 'string' ? detail : detail?.message || 'Failed to register organization. Please check details.';
         setError(msg);
       } else {
-        setError('የግንኙነት ስህተት ተከስቷል');
+        setError('Network connection error. Please verify the server is running.');
       }
     } finally {
       setIsLoading(false);
@@ -70,34 +70,34 @@ export const RegisterOrgPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-zinc-50/60 p-4 font-sans select-none">
+    <div className="min-h-screen w-full flex items-center justify-center bg-slate-50/70 p-4 font-sans select-none">
       <div className="w-full max-w-md">
         {/* Brand Header */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-900 text-white shadow-md mb-3">
-            <Building2 className="w-6 h-6" />
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 text-blue-600 mb-3 shadow-xs">
+            <Building2 className="w-6 h-6 text-blue-600" />
           </div>
-          <h1 className="text-xl font-semibold text-zinc-900 tracking-tight">የድርጅት ምዝገባ (Organization Setup)</h1>
-          <p className="text-xs text-zinc-500 mt-1">አዲስ ድርጅት እና የደመና ወይም የውስጥ ቢሮ ስርዓት ማዘጋጀት</p>
+          <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Organization Setup</h1>
+          <p className="text-xs text-slate-500 mt-1">Provision a new tenant and configure your enterprise workspace</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-zinc-200/60 p-6 sm:p-8">
+        <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-6 sm:p-8">
           {success ? (
             <div className="text-center py-6">
               <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto mb-3" />
-              <h3 className="text-base font-semibold text-zinc-900">ድርጅቱ በተሳካ ሁኔታ ተመዝግቧል!</h3>
-              <p className="text-xs text-zinc-500 mt-1.5">ወደ መግቢያ ገጽ እየተዛወሩ ነው...</p>
+              <h3 className="text-base font-semibold text-slate-900">Workspace Created Successfully!</h3>
+              <p className="text-xs text-slate-500 mt-1.5">Redirecting to sign in...</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-3.5">
               {error && (
-                <div className="p-3 rounded-lg bg-red-50 text-red-700 text-xs">
+                <div className="p-3 rounded-lg bg-red-50 text-red-700 text-xs border border-red-100">
                   {error}
                 </div>
               )}
 
               <Input
-                label="የድርጅት ስም (Organization Name)"
+                label="Organization name"
                 placeholder="Abyssinia Technology PLC"
                 value={formData.organization_name}
                 onChange={(e) => handleNameChange(e.target.value)}
@@ -108,30 +108,30 @@ export const RegisterOrgPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <Input
-                  label="መለያ ስም (Tenant Slug)"
+                  label="Workspace slug"
                   placeholder="abyssinia"
                   value={formData.slug}
                   onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
                   required
                 />
                 <Input
-                  label="የግብር ከፋይ መለያ (TIN Number)"
-                  placeholder="10 አሃዝ ቁጥር"
+                  label="Tax ID (TIN)"
+                  placeholder="10-digit number"
                   value={formData.tin_number}
                   onChange={(e) => setFormData({ ...formData, tin_number: e.target.value })}
                   leftIcon={<Hash className="w-4 h-4" />}
                 />
               </div>
 
-              <div className="pt-2 border-t border-zinc-100">
-                <p className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider mb-2">
-                  የዋና አስተዳዳሪ መረጃ (Admin Account)
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2">
+                  Administrator Account
                 </p>
               </div>
 
               <Input
-                label="የአስተዳዳሪ ሙሉ ስም (Full Name)"
-                placeholder="አበበ ከበደ"
+                label="Administrator full name"
+                placeholder="Abebe Kebede"
                 value={formData.admin_full_name}
                 onChange={(e) => setFormData({ ...formData, admin_full_name: e.target.value })}
                 leftIcon={<User className="w-4 h-4" />}
@@ -139,7 +139,7 @@ export const RegisterOrgPage: React.FC = () => {
               />
 
               <Input
-                label="የአስተዳዳሪ ኢሜይል (Admin Email)"
+                label="Work email"
                 type="email"
                 placeholder="admin@abyssinia.et"
                 value={formData.admin_email}
@@ -149,9 +149,9 @@ export const RegisterOrgPage: React.FC = () => {
               />
 
               <Input
-                label="የይለፍ ቃል (Password)"
+                label="Password"
                 type="password"
-                placeholder="ቢያንስ 8 ፊደላት እና ቁጥር"
+                placeholder="Minimum 8 characters"
                 value={formData.admin_password}
                 onChange={(e) => setFormData({ ...formData, admin_password: e.target.value })}
                 leftIcon={<Lock className="w-4 h-4" />}
@@ -165,18 +165,19 @@ export const RegisterOrgPage: React.FC = () => {
                 isLoading={isLoading}
                 rightIcon={<ArrowRight className="w-4 h-4" />}
               >
-                ድርጅቱን ፍጠር (Provision Organization)
+                Create Workspace
               </Button>
             </form>
           )}
         </div>
 
+        {/* Footer Link to Login */}
         <div className="text-center mt-6">
           <Link
             to="/login"
-            className="text-xs text-zinc-500 hover:text-zinc-800 transition-colors"
+            className="text-xs text-slate-500 hover:text-blue-600 transition-colors"
           >
-            አስቀድመው አካውንት አሎት? (Already have an account? Sign In)
+            Already have a workspace? <span className="font-medium underline underline-offset-2">Sign in</span>
           </Link>
         </div>
       </div>

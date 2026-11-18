@@ -15,6 +15,7 @@ from app.api.v1.endpoints import (
     audit,
     tags,
     notifications,
+    system,
 )
 
 api_router = APIRouter()
@@ -46,3 +47,4 @@ api_router.include_router(search.router, prefix="/search", tags=["Module 10: Ful
 api_router.include_router(audit.router, prefix="/audit", tags=["Module 11: Audit, Compliance & Observability (የቁጥጥር ስርዓት)"])
 api_router.include_router(tags.router, prefix="/tags", tags=["Document Tags & Taxonomy Classification Engine"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["In-App Notifications & Event Alert Engine"])
+api_router.include_router(system.router, prefix="/system", tags=["System Deployment & Topology"])

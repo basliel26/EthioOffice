@@ -1,3 +1,11 @@
+export interface SystemContext {
+  deployment_mode: 'ON_PREMISE' | 'CLOUD_SAAS';
+  organization_name?: string;
+  organization_slug?: string;
+  allow_public_registration: boolean;
+  system_name: string;
+}
+
 export interface OrganizationSummary {
   id: string;
   name: string;

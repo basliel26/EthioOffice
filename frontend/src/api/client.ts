@@ -22,6 +22,7 @@ import type {
   ShareLinkResponse,
   PublicLinkMetadataResponse,
   PublicLinkAccessSession,
+  SystemContext,
 } from './types';
 
 export const api = axios.create({
@@ -446,6 +447,16 @@ export const publicApi = {
     const res = await api.post<FileItem>(`/public/links/${token}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    return res.data;
+  },
+};
+
+// -------------------------------------------------------------
+// 12. System Deployment & Topology Probe (Offline/On-Prem vs Cloud)
+// -------------------------------------------------------------
+export const systemApi = {
+  getContext: async (): Promise<SystemContext> => {
+    const res = await api.get<SystemContext>('/system/context');
     return res.data;
   },
 };

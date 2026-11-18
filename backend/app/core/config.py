@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "ethiooffice-dev-secret-key-change-in-production-12345"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 day
     LICENSE_SIGNING_KEY: str = "ethiooffice-offline-licensing-master-key-2026"
+
+    # Deployment Topology (Hybrid: On-Premise Intranet vs Cloud SaaS)
+    DEPLOYMENT_MODE: str = "ON_PREMISE"  # "ON_PREMISE" | "CLOUD_SAAS"
+    ALLOW_PUBLIC_REGISTRATION: bool = False  # False for private intranet servers, True for public cloud
+    ORGANIZATION_NAME: Optional[str] = "Wine Technologies"
     
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = [

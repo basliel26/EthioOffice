@@ -2,6 +2,8 @@ import React from 'react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
+  labelClassName?: string;
+  inputSize?: 'sm' | 'md' | 'lg';
   error?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
@@ -9,6 +11,8 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
   label,
+  labelClassName = '',
+  inputSize = 'md',
   error,
   leftIcon,
   rightIcon,
@@ -18,10 +22,28 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
 }, ref) => {
   const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
 
+  const sizeStyles = {
+    sm: 'px-2.5 py-1.5 text-xs',
+    md: 'px-3 py-2 text-sm',
+    lg: 'px-3.5 py-2.5 text-base',
+  };
+
+  const iconLeftPad = {
+    sm: 'pl-8',
+    md: 'pl-9',
+    lg: 'pl-10',
+  };
+
+  const iconRightPad = {
+    sm: 'pr-8',
+    md: 'pr-9',
+    lg: 'pr-10',
+  };
+
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={inputId} className="block text-xs font-medium text-zinc-600 mb-1.5">
+        <label htmlFor={inputId} className={`block mb-1.5 ${labelClassName ? labelClassName : 'text-xs font-medium text-zinc-600'}`}>
           {label}
         </label>
       )}
@@ -34,9 +56,9 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
         <input
           id={inputId}
           ref={ref}
-          className={`w-full rounded-lg bg-zinc-50/80 border border-zinc-200/80 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 transition-colors focus:bg-white focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 disabled:opacity-50 ${
-            leftIcon ? 'pl-9' : ''
-          } ${rightIcon ? 'pr-9' : ''} ${error ? 'border-red-400 focus:border-red-500 focus:ring-red-400' : ''} ${className}`}
+          className={`w-full rounded-xl bg-zinc-50/70 border border-zinc-200/80 ${sizeStyles[inputSize]} text-zinc-900 placeholder:text-zinc-400 transition-all focus:bg-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:opacity-50 ${
+            leftIcon ? iconLeftPad[inputSize] : ''
+          } ${rightIcon ? iconRightPad[inputSize] : ''} ${error ? 'border-red-400 focus:border-red-500 focus:ring-red-400' : ''} ${className}`}
           {...props}
         />
         {rightIcon && (
