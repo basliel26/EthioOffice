@@ -22,6 +22,10 @@ import {
   Presentation,
   FilePlus2,
   ExternalLink,
+  List,
+  LayoutGrid,
+  Filter,
+  X,
 } from 'lucide-react';
 import { filesApi, tagsApi, sharesApi } from '../../api/client';
 import { useSearchScope } from '../../context/SearchContext';
@@ -127,7 +131,24 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   const [rowContextMenu, setRowContextMenu] = useState<{ x: number; y: number; file: FileItem } | null>(null);
   const [activeRowMenuId, setActiveRowMenuId] = useState<string | null>(null);
 
+  // Filter & Layout State
+  type TypeFilter = 'ALL' | 'FOLDERS' | 'DOCX' | 'XLSX' | 'PPTX' | 'TXT' | 'PDF';
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<TypeFilter>('ALL');
+  const [showTagFilterMenu, setShowTagFilterMenu] = useState(false);
+  const [showTypeFilterMenu, setShowTypeFilterMenu] = useState(false);
+  const [displayLayout, setDisplayLayout] = useState<'list' | 'grid'>(() => {
+    const saved = localStorage.getItem('ethiooffice_drive_layout');
+    return saved === 'grid' ? 'grid' : 'list';
+  });
+
+  const handleToggleLayout = (layout: 'list' | 'grid') => {
+    setDisplayLayout(layout);
+    localStorage.setItem('ethiooffice_drive_layout', layout);
+  };
+
   const newDocMenuRef = useRef<HTMLDivElement>(null);
+  const tagMenuRef = useRef<HTMLDivElement>(null);
+  const typeMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openCanvasContextMenu = (e: React.MouseEvent) => {
@@ -159,6 +180,12 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       if (newDocMenuRef.current && !newDocMenuRef.current.contains(e.target as Node)) {
         setShowNewDocMenu(false);
       }
+      if (tagMenuRef.current && !tagMenuRef.current.contains(e.target as Node)) {
+        setShowTagFilterMenu(false);
+      }
+      if (typeMenuRef.current && !typeMenuRef.current.contains(e.target as Node)) {
+        setShowTypeFilterMenu(false);
+      }
       setCanvasContextMenu(null);
       setRowContextMenu(null);
       setActiveRowMenuId(null);
@@ -166,6 +193,8 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setShowNewDocMenu(false);
+        setShowTagFilterMenu(false);
+        setShowTypeFilterMenu(false);
         setCanvasContextMenu(null);
         setRowContextMenu(null);
         setActiveRowMenuId(null);
@@ -429,10 +458,221 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
+  const getFileIcon = (file: FileItem, sizeClass: string = 'w-5 h-5') => {
+    if (file.is_folder) {
+      return <Folder className={`${sizeClass} text-blue-600 fill-blue-50/70 shrink-0`} />;
+    }
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.docx') || name.endsWith('.doc')) {
+      return <FileText className={`${sizeClass} text-blue-600 shrink-0`} />;
+    }
+    if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv')) {
+      return <FileSpreadsheet className={`${sizeClass} text-emerald-600 shrink-0`} />;
+    }
+    if (name.endsWith('.pptx') || name.endsWith('.ppt')) {
+      return <Presentation className={`${sizeClass} text-amber-600 shrink-0`} />;
+    }
+    if (name.endsWith('.pdf')) {
+      return <FileText className={`${sizeClass} text-rose-600 shrink-0`} />;
+    }
+    if (name.endsWith('.txt')) {
+      return <FileText className={`${sizeClass} text-slate-500 shrink-0`} />;
+    }
+    return <FileText className={`${sizeClass} text-slate-400 shrink-0`} />;
+  };
+
+  const getTypeFilterLabel = (type: TypeFilter): string => {
+    switch (type) {
+      case 'FOLDERS':
+        return 'Folders';
+      case 'DOCX':
+        return 'Word (.docx)';
+      case 'XLSX':
+        return 'Excel (.xlsx)';
+      case 'PPTX':
+        return 'PowerPoint (.pptx)';
+      case 'TXT':
+        return 'Text (.txt)';
+      case 'PDF':
+        return 'PDF (.pdf)';
+      case 'ALL':
+      default:
+        return 'All Types';
+    }
+  };
+
+  const typeFilterOptions = [
+    { id: 'ALL' as const, label: 'All Types', icon: <FileText className="w-3.5 h-3.5 text-slate-400" /> },
+    { id: 'FOLDERS' as const, label: 'Folders', icon: <Folder className="w-3.5 h-3.5 text-blue-600" /> },
+    { id: 'DOCX' as const, label: 'Word Documents (.docx)', icon: <FileText className="w-3.5 h-3.5 text-blue-600" /> },
+    { id: 'XLSX' as const, label: 'Spreadsheets (.xlsx)', icon: <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" /> },
+    { id: 'PPTX' as const, label: 'Presentations (.pptx)', icon: <Presentation className="w-3.5 h-3.5 text-amber-600" /> },
+    { id: 'TXT' as const, label: 'Text Notes (.txt)', icon: <FileText className="w-3.5 h-3.5 text-slate-500" /> },
+    { id: 'PDF' as const, label: 'PDF Documents (.pdf)', icon: <FileText className="w-3.5 h-3.5 text-rose-600" /> },
+  ];
+
   const filteredFiles = files.filter((f) => {
-    if (!selectedTagFilter) return true;
-    return f.tags?.includes(selectedTagFilter);
+    if (selectedTagFilter && !f.tags?.includes(selectedTagFilter)) {
+      return false;
+    }
+    if (selectedTypeFilter === 'FOLDERS') {
+      return f.is_folder;
+    }
+    if (selectedTypeFilter === 'DOCX') {
+      return !f.is_folder && f.name.toLowerCase().endsWith('.docx');
+    }
+    if (selectedTypeFilter === 'XLSX') {
+      return !f.is_folder && (f.name.toLowerCase().endsWith('.xlsx') || f.name.toLowerCase().endsWith('.csv'));
+    }
+    if (selectedTypeFilter === 'PPTX') {
+      return !f.is_folder && f.name.toLowerCase().endsWith('.pptx');
+    }
+    if (selectedTypeFilter === 'TXT') {
+      return !f.is_folder && f.name.toLowerCase().endsWith('.txt');
+    }
+    if (selectedTypeFilter === 'PDF') {
+      return !f.is_folder && f.name.toLowerCase().endsWith('.pdf');
+    }
+    return true;
   });
+
+  const folderCount = filteredFiles.filter((f) => f.is_folder).length;
+  const fileCount = filteredFiles.filter((f) => !f.is_folder).length;
+
+  const renderMenuActions = (file: FileItem) => {
+    if (viewMode === 'TRASH') {
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveRowMenuId(null);
+              handleRestore(file);
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-emerald-700 transition-colors cursor-pointer"
+          >
+            <RotateCcw className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Restore Item</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveRowMenuId(null);
+              handleDelete(file);
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-red-50 text-xs font-medium text-red-600 transition-colors cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4 text-red-600 shrink-0" />
+            <span>Delete Permanently</span>
+          </button>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveRowMenuId(null);
+            if (file.is_folder) {
+              handleOpenFolder(file);
+            } else {
+              navigate(`/editor/${file.id}`);
+            }
+          }}
+          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+        >
+          <ExternalLink className="w-4 h-4 text-slate-500 shrink-0" />
+          <span>{file.is_folder ? 'Open Folder' : 'Open in Editor'}</span>
+        </button>
+
+        {!file.is_folder && (
+          <a
+            href={`/api/v1/files/${file.id}/download`}
+            onClick={() => setActiveRowMenuId(null)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors"
+          >
+            <Download className="w-4 h-4 text-slate-500 shrink-0" />
+            <span>Download</span>
+          </a>
+        )}
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveRowMenuId(null);
+            setTargetFile(file);
+            setShowShareModal(true);
+          }}
+          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+        >
+          <Share2 className="w-4 h-4 text-slate-500 shrink-0" />
+          <span>Share & Permissions</span>
+        </button>
+
+        {!file.is_folder && (
+          <button
+            type="button"
+            onClick={() => {
+              setActiveRowMenuId(null);
+              setTargetFile(file);
+              setSelectedTagIds(
+                availableTags
+                  .filter((t) => file.tags?.includes(t.name))
+                  .map((t) => t.id)
+              );
+              setShowTagModal(true);
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+          >
+            <TagIcon className="w-4 h-4 text-slate-500 shrink-0" />
+            <span>Assign Tags</span>
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveRowMenuId(null);
+            setTargetFile(file);
+            setRenameValue(file.name);
+            setShowRenameModal(true);
+          }}
+          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+        >
+          <Edit2 className="w-4 h-4 text-slate-500 shrink-0" />
+          <span>Rename</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveRowMenuId(null);
+            handleToggleStar(file);
+          }}
+          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+        >
+          <Star className={`w-4 h-4 ${file.is_starred ? 'fill-amber-400 text-amber-400' : 'text-slate-500'} shrink-0`} />
+          <span>{file.is_starred ? 'Remove Star' : 'Add to Starred'}</span>
+        </button>
+
+        <div className="border-t border-slate-100 my-1" />
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveRowMenuId(null);
+            handleDelete(file);
+          }}
+          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-red-50 text-xs font-medium text-red-600 transition-colors cursor-pointer"
+        >
+          <Trash2 className="w-4 h-4 text-red-600 shrink-0" />
+          <span>Move to Recycle Bin</span>
+        </button>
+      </>
+    );
+  };
 
   return (
     <div className="space-y-3 select-none font-sans">
@@ -561,44 +801,178 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         </div>
       </div>
 
-      {/* Filter and Tag Chips Row */}
-      {availableTags.length > 0 && viewMode !== 'TRASH' && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <span className="text-xs font-semibold text-slate-400 shrink-0">Tags:</span>
-          <button
-            onClick={() => setSelectedTagFilter(null)}
-            className={`px-3 py-1 text-xs rounded-lg transition-all font-semibold ${
-              selectedTagFilter === null
-                ? 'bg-blue-600 text-white shadow-2xs'
-                : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 border border-slate-200/60'
-            }`}
-          >
-            All
-          </button>
-          {availableTags.map((t) => (
+      {/* Sub-Toolbar: Filtering Controls (Left) & Item Count / Layout Switcher (Right) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-0.5">
+        {/* Left Side: Tag & Type Filter Dropdowns */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* 1. Tag Filter Dropdown */}
+          {availableTags.length > 0 && viewMode !== 'TRASH' && (
+            <div className="relative" ref={tagMenuRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTagFilterMenu((prev) => !prev);
+                  setShowTypeFilterMenu(false);
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-xl border transition-all ${
+                  selectedTagFilter
+                    ? 'bg-blue-50 border-blue-300 text-blue-700 font-semibold shadow-2xs'
+                    : 'bg-white border-slate-200/80 text-slate-700 hover:bg-slate-50 font-medium'
+                }`}
+              >
+                <TagIcon className="w-3.5 h-3.5 text-slate-500" />
+                <span>{selectedTagFilter ? `Tag: ${selectedTagFilter}` : 'Tag'}</span>
+                <ChevronDown className="w-3 h-3 text-slate-400" />
+              </button>
+
+              {showTagFilterMenu && (
+                <div className="absolute left-0 top-full mt-1.5 w-48 rounded-xl bg-white shadow-xl border border-slate-200/90 py-1.5 z-40 animate-scale-up">
+                  <p className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Filter by Tag
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedTagFilter(null);
+                      setShowTagFilterMenu(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-left text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    <span>All Tags</span>
+                    {selectedTagFilter === null && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                  </button>
+                  <div className="border-t border-slate-100 my-1" />
+                  {availableTags.map((tag) => (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTagFilter(tag.name);
+                        setShowTagFilterMenu(false);
+                      }}
+                      className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-left text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                        <span className="truncate">{tag.name}</span>
+                      </div>
+                      {selectedTagFilter === tag.name && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 2. Type Filter Dropdown */}
+          <div className="relative" ref={typeMenuRef}>
             <button
-              key={t.id}
-              onClick={() => setSelectedTagFilter(selectedTagFilter === t.name ? null : t.name)}
-              className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded-lg transition-all font-semibold ${
-                selectedTagFilter === t.name
-                  ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'bg-slate-100/90 text-slate-700 hover:bg-slate-200/70 border border-slate-200/60'
+              type="button"
+              onClick={() => {
+                setShowTypeFilterMenu((prev) => !prev);
+                setShowTagFilterMenu(false);
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-xl border transition-all ${
+                selectedTypeFilter !== 'ALL'
+                  ? 'bg-blue-50 border-blue-300 text-blue-700 font-semibold shadow-2xs'
+                  : 'bg-white border-slate-200/80 text-slate-700 hover:bg-slate-50 font-medium'
               }`}
             >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
-              <span>{t.name}</span>
+              <Filter className="w-3.5 h-3.5 text-slate-500" />
+              <span>{getTypeFilterLabel(selectedTypeFilter)}</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
             </button>
-          ))}
+
+            {showTypeFilterMenu && (
+              <div className="absolute left-0 top-full mt-1.5 w-52 rounded-xl bg-white shadow-xl border border-slate-200/90 py-1.5 z-40 animate-scale-up">
+                <p className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Filter by Type
+                </p>
+                {typeFilterOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedTypeFilter(opt.id);
+                      setShowTypeFilterMenu(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-left text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      {opt.icon}
+                      <span>{opt.label}</span>
+                    </div>
+                    {selectedTypeFilter === opt.id && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Reset Filters button */}
+          {(selectedTagFilter || selectedTypeFilter !== 'ALL') && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedTagFilter(null);
+                setSelectedTypeFilter('ALL');
+              }}
+              className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-slate-700 px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <X className="w-3 h-3" />
+              <span>Reset</span>
+            </button>
+          )}
         </div>
-      )}
+
+        {/* Right Side: Item Count & List/Grid Layout Toggle */}
+        <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
+          <span className="text-xs text-slate-400 font-medium whitespace-nowrap">
+            {filteredFiles.length === 0
+              ? '0 items'
+              : `${filteredFiles.length} item${filteredFiles.length > 1 ? 's' : ''}${
+                  folderCount > 0 && fileCount > 0
+                    ? ` (${folderCount} folder${folderCount > 1 ? 's' : ''}, ${fileCount} file${fileCount > 1 ? 's' : ''})`
+                    : ''
+                }`}
+          </span>
+
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200/70">
+            <button
+              type="button"
+              onClick={() => handleToggleLayout('list')}
+              title="List View"
+              className={`p-1 rounded-md transition-all cursor-pointer ${
+                displayLayout === 'list'
+                  ? 'bg-white shadow-2xs text-blue-600 font-semibold'
+                  : 'text-slate-400 hover:text-slate-700'
+              }`}
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleToggleLayout('grid')}
+              title="Grid View"
+              className={`p-1 rounded-md transition-all cursor-pointer ${
+                displayLayout === 'grid'
+                  ? 'bg-white shadow-2xs text-blue-600 font-semibold'
+                  : 'text-slate-400 hover:text-slate-700'
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Files & Folders Content List */}
       <div
         onContextMenu={openCanvasContextMenu}
-        className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-2 sm:p-3"
+        className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-2 sm:p-3 min-h-[300px]"
       >
         {isLoading ? (
-          <div className="py-16 text-center text-xs font-medium text-slate-400">Loading files...</div>
+          <div className="py-20 text-center text-xs font-medium text-slate-400">Loading files...</div>
         ) : filteredFiles.length === 0 ? (
           <div
             onContextMenu={openCanvasContextMenu}
@@ -608,7 +982,118 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
             <p className="text-sm font-bold text-slate-800">This folder is empty</p>
             <p className="text-xs text-slate-400">Upload a document, create a new file or right-click anywhere to get started.</p>
           </div>
+        ) : displayLayout === 'grid' ? (
+          /* Grid View */
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3">
+            {filteredFiles.map((file) => (
+              <div
+                key={file.id}
+                onContextMenu={(e) => openRowContextMenu(e, file)}
+                onDoubleClick={() => {
+                  if (file.is_folder) {
+                    handleOpenFolder(file);
+                  } else {
+                    navigate(`/editor/${file.id}`);
+                  }
+                }}
+                className="group relative flex flex-col justify-between p-3.5 rounded-2xl bg-white border border-slate-200/80 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer select-none"
+              >
+                {/* Top: Icon + Star & Three-dots */}
+                <div className="flex items-start justify-between gap-1.5">
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100/90 group-hover:bg-blue-50/70 transition-colors">
+                    {getFileIcon(file, 'w-6 h-6')}
+                  </div>
+
+                  <div className="flex items-center gap-0.5">
+                    {viewMode !== 'TRASH' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleStar(file);
+                        }}
+                        className={`p-1 rounded-md text-slate-300 hover:text-amber-500 transition-colors ${
+                          file.is_starred ? 'text-amber-400 opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        }`}
+                        title={file.is_starred ? 'Remove Star' : 'Star Document'}
+                      >
+                        <Star
+                          className={`w-3.5 h-3.5 ${
+                            file.is_starred ? 'fill-amber-400 text-amber-400' : ''
+                          }`}
+                        />
+                      </button>
+                    )}
+
+                    {/* Three Dots Action Button */}
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveRowMenuId(activeRowMenuId === file.id ? null : file.id);
+                        }}
+                        className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                        title="More options"
+                      >
+                        <MoreVertical className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Three-dots Menu in Grid View */}
+                      {activeRowMenuId === file.id && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 top-full mt-1 w-52 rounded-xl bg-white shadow-xl border border-slate-200/90 py-1.5 z-40 animate-scale-up font-sans text-left"
+                        >
+                          {renderMenuActions(file)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Middle: Name & Lock */}
+                <div className="mt-3 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="text-xs font-semibold text-slate-800 group-hover:text-blue-600 transition-colors truncate"
+                      title={file.name}
+                    >
+                      {file.name}
+                    </span>
+                    {file.is_locked && <Lock className="w-3 h-3 text-amber-600 shrink-0" />}
+                  </div>
+
+                  {/* Tags if any */}
+                  {file.tags && file.tags.length > 0 && (
+                    <div className="flex items-center gap-1 mt-1 overflow-hidden">
+                      {file.tags.slice(0, 2).map((tg) => (
+                        <span
+                          key={tg}
+                          className="text-[9px] font-semibold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded truncate"
+                        >
+                          {tg}
+                        </span>
+                      ))}
+                      {file.tags.length > 2 && (
+                        <span className="text-[9px] text-slate-400 font-medium">
+                          +{file.tags.length - 2}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom: Meta info */}
+                <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium mt-3 pt-2 border-t border-slate-100">
+                  <span>{file.is_folder ? `${file.file_count || 0} items` : formatFileSize(file.size_bytes)}</span>
+                  <span className="truncate max-w-[80px] text-right">
+                    {file.ec_created_at || (file.created_at ? new Date(file.created_at).toLocaleDateString() : '')}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
+          /* List View */
           <div className="space-y-1 sm:space-y-1.5">
             {filteredFiles.map((file) => (
               <div
@@ -623,244 +1108,140 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                 }}
                 className="flex items-center justify-between p-3 sm:px-4 rounded-xl border border-transparent hover:border-slate-200/70 hover:bg-slate-50/80 transition-all group cursor-pointer"
               >
-                  {/* Left: Star + Icon + Name + Tags */}
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    {viewMode !== 'TRASH' && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleStar(file);
-                        }}
-                        className="text-slate-300 hover:text-amber-500 p-0.5 rounded transition-colors shrink-0"
-                        title={file.is_starred ? 'Remove Star' : 'Star Document'}
-                      >
-                        <Star
-                          className={`w-4 h-4 ${
-                            file.is_starred ? 'fill-amber-400 text-amber-400' : ''
-                          }`}
-                        />
-                      </button>
-                    )}
+                {/* Left: Star + Icon + Name + Tags */}
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  {viewMode !== 'TRASH' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleStar(file);
+                      }}
+                      className="text-slate-300 hover:text-amber-500 p-0.5 rounded transition-colors shrink-0"
+                      title={file.is_starred ? 'Remove Star' : 'Star Document'}
+                    >
+                      <Star
+                        className={`w-4 h-4 ${
+                          file.is_starred ? 'fill-amber-400 text-amber-400' : ''
+                        }`}
+                      />
+                    </button>
+                  )}
 
-                    <div className="shrink-0">
-                      {file.is_folder ? (
-                        <Folder className="w-5 h-5 text-blue-600 fill-blue-50/70" />
-                      ) : (
-                        <FileText className="w-5 h-5 text-slate-400" />
-                      )}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
-                          {file.name}
-                        </span>
-                        {file.is_locked && (
-                          <span className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200/70 shrink-0 font-medium">
-                            <Lock className="w-3 h-3" />
-                            <span>Locked by {file.lock_info?.locked_by_name || 'User'}</span>
-                          </span>
-                        )}
-                      </div>
-                      {/* Tags row */}
-                      {file.tags && file.tags.length > 0 && (
-                        <div className="flex items-center gap-1.5 mt-1">
-                          {file.tags.map((tg) => (
-                            <span
-                              key={tg}
-                              className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200/60"
-                            >
-                              {tg}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                  <div className="shrink-0">
+                    {getFileIcon(file, 'w-5 h-5')}
                   </div>
 
-                  {/* Right: Size, Date, Actions */}
-                  <div className="flex items-center gap-4 sm:gap-6 shrink-0 text-xs text-slate-400">
-                    <span className="w-16 sm:w-20 text-right font-medium text-slate-600">
-                      {file.is_folder ? `${file.file_count || 0} items` : formatFileSize(file.size_bytes)}
-                    </span>
-
-                    <span className="w-28 sm:w-32 text-right hidden sm:inline font-medium text-slate-500">
-                      {file.ec_created_at || new Date(file.created_at).toLocaleDateString()}
-                    </span>
-
-                    {/* Actions Dropdown / Three-Dots Button */}
-                    <div className="flex items-center gap-1">
-                      {viewMode === 'TRASH' ? (
-                        <>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRestore(file);
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-emerald-700 rounded-lg hover:bg-slate-100 transition-colors"
-                            title="Restore"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(file);
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition-colors"
-                            title="Delete Permanently"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          {!file.is_folder && (
-                            <a
-                              href={`/api/v1/files/${file.id}/download`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition-colors opacity-0 group-hover:opacity-100 hidden sm:inline-block"
-                              title="Download"
-                            >
-                              <Download className="w-4 h-4" />
-                            </a>
-                          )}
-
-                          {/* Three-Dots Menu Button */}
-                          <div className="relative">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveRowMenuId(activeRowMenuId === file.id ? null : file.id);
-                              }}
-                              className={`p-1.5 rounded-lg transition-colors ${
-                                activeRowMenuId === file.id
-                                  ? 'bg-slate-100 text-slate-800'
-                                  : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
-                              }`}
-                              title="More options"
-                            >
-                              <MoreVertical className="w-4 h-4" />
-                            </button>
-
-                            {/* Dropdown Menu */}
-                            {activeRowMenuId === file.id && (
-                              <div
-                                onClick={(e) => e.stopPropagation()}
-                                className="absolute right-0 top-full mt-1 w-52 rounded-xl bg-white shadow-xl border border-slate-200/90 py-1.5 z-40 animate-scale-up font-sans text-left"
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveRowMenuId(null);
-                                    if (file.is_folder) {
-                                      handleOpenFolder(file);
-                                    } else {
-                                      navigate(`/editor/${file.id}`);
-                                    }
-                                  }}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
-                                >
-                                  <ExternalLink className="w-4 h-4 text-slate-500 shrink-0" />
-                                  <span>{file.is_folder ? 'Open Folder' : 'Open in Editor'}</span>
-                                </button>
-
-                                {!file.is_folder && (
-                                  <a
-                                    href={`/api/v1/files/${file.id}/download`}
-                                    onClick={() => setActiveRowMenuId(null)}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors"
-                                  >
-                                    <Download className="w-4 h-4 text-slate-500 shrink-0" />
-                                    <span>Download</span>
-                                  </a>
-                                )}
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveRowMenuId(null);
-                                    setTargetFile(file);
-                                    setShowShareModal(true);
-                                  }}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
-                                >
-                                  <Share2 className="w-4 h-4 text-slate-500 shrink-0" />
-                                  <span>Share & Permissions</span>
-                                </button>
-
-                                {!file.is_folder && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveRowMenuId(null);
-                                      setTargetFile(file);
-                                      setSelectedTagIds(
-                                        availableTags
-                                          .filter((t) => file.tags?.includes(t.name))
-                                          .map((t) => t.id)
-                                      );
-                                      setShowTagModal(true);
-                                    }}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
-                                  >
-                                    <TagIcon className="w-4 h-4 text-slate-500 shrink-0" />
-                                    <span>Assign Tags</span>
-                                  </button>
-                                )}
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveRowMenuId(null);
-                                    setTargetFile(file);
-                                    setRenameValue(file.name);
-                                    setShowRenameModal(true);
-                                  }}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
-                                >
-                                  <Edit2 className="w-4 h-4 text-slate-500 shrink-0" />
-                                  <span>Rename</span>
-                                </button>
-
-                                <div className="border-t border-slate-100 my-1" />
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveRowMenuId(null);
-                                    handleToggleStar(file);
-                                  }}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-amber-600 transition-colors cursor-pointer"
-                                >
-                                  <Star className={`w-4 h-4 shrink-0 ${file.is_starred ? 'text-amber-500 fill-amber-400' : 'text-slate-500'}`} />
-                                  <span>{file.is_starred ? 'Remove Star' : 'Star Document'}</span>
-                                </button>
-
-                                <div className="border-t border-slate-100 my-1" />
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveRowMenuId(null);
-                                    handleDelete(file);
-                                  }}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-red-50 text-xs font-medium text-red-600 transition-colors cursor-pointer"
-                                >
-                                  <Trash2 className="w-4 h-4 text-red-500 shrink-0" />
-                                  <span>Move to Recycle Bin</span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
+                        {file.name}
+                      </span>
+                      {file.is_locked && (
+                        <span className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200/70 shrink-0 font-medium">
+                          <Lock className="w-3 h-3" />
+                          <span>Locked by {file.lock_info?.locked_by_name || 'User'}</span>
+                        </span>
                       )}
                     </div>
+                    {/* Tags row */}
+                    {file.tags && file.tags.length > 0 && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        {file.tags.map((tg) => (
+                          <span
+                            key={tg}
+                            className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200/60"
+                          >
+                            {tg}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+
+                {/* Right: Size, Date, Actions */}
+                <div className="flex items-center gap-4 sm:gap-6 shrink-0 text-xs text-slate-400">
+                  <span className="w-16 sm:w-20 text-right font-medium text-slate-600">
+                    {file.is_folder ? `${file.file_count || 0} items` : formatFileSize(file.size_bytes)}
+                  </span>
+
+                  <span className="w-28 sm:w-32 text-right hidden sm:inline font-medium text-slate-500">
+                    {file.ec_created_at || new Date(file.created_at).toLocaleDateString()}
+                  </span>
+
+                  {/* Actions Dropdown / Three-Dots Button */}
+                  <div className="flex items-center gap-1">
+                    {viewMode === 'TRASH' ? (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRestore(file);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-emerald-700 rounded-lg hover:bg-slate-100 transition-colors"
+                          title="Restore"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(file);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition-colors"
+                          title="Delete Permanently"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {!file.is_folder && (
+                          <a
+                            href={`/api/v1/files/${file.id}/download`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition-colors opacity-0 group-hover:opacity-100 hidden sm:inline-block"
+                            title="Download"
+                          >
+                            <Download className="w-4 h-4" />
+                          </a>
+                        )}
+
+                        {/* Three-Dots Menu Button */}
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveRowMenuId(activeRowMenuId === file.id ? null : file.id);
+                            }}
+                            className={`p-1.5 rounded-lg transition-colors ${
+                              activeRowMenuId === file.id
+                                ? 'bg-slate-100 text-slate-800'
+                                : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                            }`}
+                            title="More options"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+
+                          {/* Dropdown Menu */}
+                          {activeRowMenuId === file.id && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute right-0 top-full mt-1 w-52 rounded-xl bg-white shadow-xl border border-slate-200/90 py-1.5 z-40 animate-scale-up font-sans text-left"
+                            >
+                              {renderMenuActions(file)}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 1. New Folder Modal */}
