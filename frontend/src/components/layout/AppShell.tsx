@@ -97,7 +97,7 @@ export const AppShell: React.FC = () => {
   const percentageUsed = Math.min(100, Math.round((usedBytes / quotaBytes) * 100));
 
   return (
-    <div className="min-h-screen w-full flex bg-slate-50/70 font-sans text-slate-900 antialiased overflow-x-hidden">
+    <div className="h-screen w-full flex bg-slate-50/70 font-sans text-slate-900 antialiased overflow-hidden">
       {/* Mobile Drawer Backdrop */}
       {isMobileMenuOpen && (
         <div
@@ -108,49 +108,48 @@ export const AppShell: React.FC = () => {
 
       {/* Collapsible / Responsive Left Sidebar */}
       <aside
-        className={`bg-white border-r border-slate-200/80 flex flex-col justify-between shrink-0 h-screen shadow-2xs transition-all duration-200 ease-in-out
-          fixed inset-y-0 left-0 z-50 md:sticky md:top-0
+        className={`bg-white border-r border-slate-200/80 flex flex-col shrink-0 h-full shadow-2xs transition-all duration-200 ease-in-out
+          fixed inset-y-0 left-0 z-50 md:static md:h-full
           ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
           ${isCollapsed ? 'md:w-18 w-64' : 'w-64'}
         `}
       >
-        <div>
-          {/* Organization Brand Header (Company Logo collapses/expands sidebar) */}
-          <div
-            className={`p-4 flex items-center border-b border-slate-100 ${
-              isCollapsed ? 'md:justify-center justify-between' : 'justify-between'
-            }`}
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                type="button"
-                onClick={() => setIsCollapsed(!isCollapsed)}
-                className="w-10 h-10 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200/80 text-blue-600 flex items-center justify-center font-bold text-xs tracking-wider shrink-0 shadow-xs transition-all active:scale-95 cursor-pointer focus:outline-none"
-                title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              >
-                <FolderKanban className="w-5 h-5 text-blue-600" />
-              </button>
-              <div className={`min-w-0 flex-1 ${isCollapsed ? 'md:hidden' : ''}`}>
-                <h2 className="text-base sm:text-lg font-bold text-slate-900 truncate tracking-tight font-sans">
-                  {user?.organization.name || 'Wine Technologies'}
-                </h2>
-              </div>
-            </div>
-
-            {/* Mobile close button */}
+        {/* Organization Brand Header (Company Logo collapses/expands sidebar) */}
+        <div
+          className={`p-4 flex items-center border-b border-slate-100 shrink-0 ${
+            isCollapsed ? 'md:justify-center justify-between' : 'justify-between'
+          }`}
+        >
+          <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="md:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
-              title="Close navigation"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="w-10 h-10 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200/80 text-blue-600 flex items-center justify-center font-bold text-xs tracking-wider shrink-0 shadow-xs transition-all active:scale-95 cursor-pointer focus:outline-none"
+              title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              <X className="w-4 h-4" />
+              <FolderKanban className="w-5 h-5 text-blue-600" />
             </button>
+            <div className={`min-w-0 flex-1 ${isCollapsed ? 'md:hidden' : ''}`}>
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 truncate tracking-tight font-sans">
+                {user?.organization.name || 'Wine Technologies'}
+              </h2>
+            </div>
           </div>
 
-          {/* Navigation Items (Windows Explorer Organization) */}
-          <div className="p-3 space-y-5 overflow-y-auto max-h-[calc(100vh-220px)]">
-            {/* Quick Access Section */}
+          {/* Mobile close button */}
+          <button
+            type="button"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="md:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+            title="Close navigation"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Navigation Items (Windows Explorer Organization) */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-5 min-h-0">
+          {/* Quick Access Section */}
             <div>
               <p className={`px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5 ${isCollapsed ? 'md:hidden' : ''}`}>
                 Quick Access
@@ -227,11 +226,10 @@ export const AppShell: React.FC = () => {
                 </nav>
               </div>
             )}
-          </div>
         </div>
 
         {/* Bottom Section: Storage Quota Meter + User Card */}
-        <div className="p-3 border-t border-slate-100 bg-white space-y-2.5">
+        <div className="p-3 border-t border-slate-100 bg-white space-y-2.5 shrink-0">
           {/* Storage Quota Bar (Restricted to Company Admin, Super Admin, and Department Managers) */}
           {canViewStorage && (
             <div className={isCollapsed ? 'hidden md:block' : ''}>
@@ -291,9 +289,9 @@ export const AppShell: React.FC = () => {
       </aside>
 
       {/* Main Area */}
-      <div className="flex-1 flex flex-col min-w-0 w-full">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Top Header Bar */}
-        <header className="h-14 bg-white border-b border-slate-200/80 px-2.5 sm:px-4 md:px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs gap-1.5 sm:gap-3 w-full min-w-0">
+        <header className="h-14 bg-white border-b border-slate-200/80 px-2.5 sm:px-4 md:px-6 flex items-center justify-between shrink-0 z-30 shadow-2xs gap-1.5 sm:gap-3 w-full min-w-0">
           {/* Left: Mobile Menu Toggle + Page Title (Pure English & Prominent) */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 shrink">
             <button
