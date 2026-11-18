@@ -79,83 +79,83 @@ export const DualCalendarDropdown: React.FC = () => {
         </span>
       </button>
 
-      {/* Popover Dual Calendar Card */}
+      {/* Popover Dual Calendar Card (Compact & Scaled to Screen) */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm sm:max-w-md bg-white rounded-2xl shadow-xl border border-slate-200/90 p-4 sm:p-5 z-50 animate-scale-up font-sans">
-          {/* Card Header (Larger with Inter font) */}
-          <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                <CalendarIcon className="w-4 h-4" />
+        <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-[305px] bg-white rounded-2xl shadow-xl border border-slate-200/90 p-3 sm:p-3.5 z-50 animate-scale-up font-sans select-none">
+          {/* Card Header (Clean & Compact) */}
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                <CalendarIcon className="w-3.5 h-3.5" />
               </div>
               <div>
-                <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-snug">
+                <h3 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight leading-tight">
                   Calendar
                 </h3>
-                <p className="text-[11px] text-slate-400 font-medium">Ethiopian & Gregorian System</p>
+                <p className="text-[10px] text-slate-400 font-medium">Ethiopian & Gregorian</p>
               </div>
             </div>
             <button
               onClick={() => setIsOpen(false)}
-              className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+              className="p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition-colors"
               title="Close"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Dual Date Cards */}
-          <div className="grid grid-cols-2 gap-2.5 my-4">
+          <div className="grid grid-cols-2 gap-2 my-2.5">
             {/* Ethiopian Panel */}
-            <div className="p-3 bg-blue-50/60 border border-blue-100 rounded-xl space-y-1">
-              <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">
+            <div className="p-2 bg-blue-50/60 border border-blue-100 rounded-lg space-y-0.5">
+              <span className="text-[9px] font-bold text-blue-700 uppercase tracking-wider block">
                 Ethiopian (ዓ.ም)
               </span>
-              <p className="text-base sm:text-lg font-extrabold text-slate-900">
+              <p className="text-sm sm:text-base font-extrabold text-slate-900 leading-snug">
                 {ethiopian_date.day} {ethiopian_date.month === 3 ? 'Hidar' : currentMonthName.split(' ')[0]}
               </p>
-              <p className="text-xs font-medium text-slate-600">
+              <p className="text-[10px] font-medium text-slate-600 truncate">
                 {ethiopian_date.formatted_amharic}
               </p>
-              <p className="text-[11px] text-blue-600 font-semibold pt-1">
-                Year: {ethiopian_date.year} E.C.
+              <p className="text-[9px] text-blue-600 font-semibold pt-0.5">
+                Year {ethiopian_date.year} E.C.
               </p>
             </div>
 
             {/* Gregorian Panel */}
-            <div className="p-3 bg-slate-50 border border-slate-200/70 rounded-xl space-y-1">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+            <div className="p-2 bg-slate-50 border border-slate-200/70 rounded-lg space-y-0.5">
+              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">
                 Gregorian (G.C.)
               </span>
-              <p className="text-base sm:text-lg font-extrabold text-slate-900">
+              <p className="text-sm sm:text-base font-extrabold text-slate-900 leading-snug">
                 {gDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </p>
-              <p className="text-xs font-medium text-slate-600">
+              <p className="text-[10px] font-medium text-slate-600 truncate">
                 {gFormatted.split(',')[0]}
               </p>
-              <p className="text-[11px] text-slate-500 font-semibold pt-1">
-                Year: {gDateObj.getFullYear()}
+              <p className="text-[9px] text-slate-500 font-semibold pt-0.5">
+                Year {gDateObj.getFullYear()}
               </p>
             </div>
           </div>
 
           {/* Mini Month Grid */}
           <div className="pt-2 border-t border-slate-100">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-800 mb-2">
-              <span className="text-sm font-bold text-slate-800">{currentMonthName}</span>
-              <span className="text-xs text-slate-400 font-medium">30 Days</span>
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-800 mb-1.5">
+              <span>{currentMonthName}</span>
+              <span className="text-[10px] text-slate-400 font-medium">30 Days</span>
             </div>
 
             {/* 30-Day Grid */}
-            <div className="grid grid-cols-7 gap-1 text-center text-xs">
+            <div className="grid grid-cols-7 gap-1 text-center">
               {Array.from({ length: daysInCurrentMonth }, (_, i) => i + 1).map((dayNum) => {
                 const isToday = dayNum === ethiopian_date.day;
                 return (
                   <div
                     key={dayNum}
-                    className={`py-1.5 rounded-lg font-semibold text-xs transition-colors ${
+                    className={`py-0.5 sm:py-1 rounded-md text-[10px] sm:text-[11px] font-semibold transition-colors ${
                       isToday
-                        ? 'bg-blue-600 text-white shadow-xs font-bold'
+                        ? 'bg-blue-600 text-white shadow-2xs font-bold'
                         : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
