@@ -280,47 +280,60 @@ export const AppShell: React.FC = () => {
       </aside>
 
       {/* Main Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 w-full">
         {/* Top Header Bar */}
-        <header className="h-14 bg-white border-b border-slate-200/80 px-3 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs gap-2 sm:gap-4">
+        <header className="h-14 bg-white border-b border-slate-200/80 px-2.5 sm:px-4 md:px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs gap-1.5 sm:gap-3 w-full min-w-0">
           {/* Left: Mobile Menu Toggle + Page Title (Pure English & Prominent) */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 shrink">
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(true)}
-              className="md:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors focus:outline-none"
+              className="md:hidden p-1.5 sm:p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors focus:outline-none shrink-0"
               title="Open navigation menu"
             >
               <Menu className="w-5 h-5" />
             </button>
 
-            <h1 className="text-base sm:text-lg md:text-xl font-bold text-slate-900 tracking-tight truncate max-w-[130px] sm:max-w-xs md:max-w-none">
+            <h1 className="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-slate-900 tracking-tight truncate min-w-0">
               {getPageTitle(location.pathname)}
             </h1>
           </div>
 
-          {/* Center: Search Bar */}
-          <div className="flex-1 max-w-xs sm:max-w-md mx-1 sm:mx-4">
+          {/* Center: Search Bar (Fluid & Gracefully Collapsing) */}
+          <div className="flex-1 max-w-xs md:max-w-md mx-1 sm:mx-2 md:mx-4 min-w-0 flex justify-center">
+            {/* Full search button on sm and up */}
             <button
               onClick={() => {
                 const event = new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true });
                 window.dispatchEvent(event);
               }}
-              className="w-full flex items-center justify-between px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-slate-100/80 hover:bg-slate-200/70 border border-slate-200/60 text-slate-500 hover:text-slate-800 transition-all text-xs font-medium shadow-2xs"
+              className="hidden sm:flex w-full items-center justify-between px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-slate-100/80 hover:bg-slate-200/70 border border-slate-200/60 text-slate-500 hover:text-slate-800 transition-all text-xs font-medium shadow-2xs min-w-0"
             >
-              <div className="flex items-center gap-2 truncate">
+              <div className="flex items-center gap-2 truncate min-w-0">
                 <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <span className="truncate hidden sm:inline">Search documents, files, letters...</span>
-                <span className="truncate sm:hidden">Search...</span>
+                <span className="truncate hidden md:inline">Search documents, files, letters...</span>
+                <span className="truncate md:hidden">Search...</span>
               </div>
-              <kbd className="hidden sm:inline-block text-[10px] bg-white text-slate-400 px-1.5 py-0.5 rounded-md shadow-2xs font-mono ml-2 border border-slate-200/60 shrink-0">
+              <kbd className="hidden lg:inline-block text-[10px] bg-white text-slate-400 px-1.5 py-0.5 rounded-md shadow-2xs font-mono ml-2 border border-slate-200/60 shrink-0">
                 Ctrl+K
               </kbd>
+            </button>
+
+            {/* Compact search icon button on narrow mobile < sm */}
+            <button
+              onClick={() => {
+                const event = new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true });
+                window.dispatchEvent(event);
+              }}
+              className="sm:hidden p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors shrink-0"
+              title="Search (Ctrl+K)"
+            >
+              <Search className="w-4 h-4" />
             </button>
           </div>
 
           {/* Right: Dual Calendar Popover + Notification Dropdown */}
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* Interactive Dual Calendar Dropdown */}
             <DualCalendarDropdown />
 

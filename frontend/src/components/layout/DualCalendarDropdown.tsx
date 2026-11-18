@@ -58,14 +58,23 @@ export const DualCalendarDropdown: React.FC = () => {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-semibold text-slate-700 bg-blue-50/80 hover:bg-blue-100/70 border border-blue-200/70 px-2 sm:px-3 py-1.5 rounded-xl transition-all shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-300"
+        className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-semibold text-slate-700 bg-blue-50/80 hover:bg-blue-100/70 border border-blue-200/70 px-2 sm:px-3 py-1.5 rounded-xl transition-all shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-300 shrink-0"
         title="Click to view dual Ethiopian & Gregorian Calendar"
       >
         <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 shrink-0" />
-        <span className="font-bold text-slate-900 truncate">
+        {/* Full date on wide screens (>= 1100px) */}
+        <span className="font-bold text-slate-900 truncate hidden xl:inline">
           {ethiopian_date.formatted_english || ethiopian_date.formatted_amharic}
         </span>
-        <span className="text-[11px] sm:text-xs text-blue-600 font-medium hidden md:inline">
+        {/* Compact date on medium/narrow screens: e.g. "10 Hidar" */}
+        <span className="font-bold text-slate-900 truncate xl:hidden hidden sm:inline">
+          {ethiopian_date.day} {ethiopian_date.month === 3 ? 'Hidar' : currentMonthName.split(' ')[0]}
+        </span>
+        {/* Day number only on very small screens: e.g. "10" */}
+        <span className="font-bold text-slate-900 sm:hidden">
+          {ethiopian_date.day}
+        </span>
+        <span className="text-[11px] sm:text-xs text-blue-600 font-medium hidden 2xl:inline">
           ({gDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})
         </span>
       </button>
