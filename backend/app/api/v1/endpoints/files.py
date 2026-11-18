@@ -21,6 +21,7 @@ from app.models.audit import AuditLog, AuditAction
 from app.schemas.file import (
     FileItemResponse,
     FolderCreate,
+    NewDocumentCreate,
     FileMoveRequest,
     FileRenameRequest,
     BreadcrumbItem,
@@ -134,6 +135,89 @@ def create_folder(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except FileItemNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except StorageDomainError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/new-document", response_model=FileItemResponse, status_code=status.HTTP_201_CREATED)
+def create_new_document(
+    payload: NewDocumentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Creates a new native office document (.docx, .xlsx, .pptx, or .txt) ready for Euro-Office editing.
+    """
+    import io
+    name = payload.name.strip()
+    ext = payload.doc_type.lower().strip()
+    if not ext.startswith("."):
+        ext = f".{ext}"
+    if not name.lower().endswith(ext):
+        filename = f"{name}{ext}"
+    else:
+        filename = name
+
+    content_bytes = b""
+    content_type = "text/plain"
+
+    try:
+        if ext == ".docx":
+            import docx
+            doc = docx.Document()
+            doc.add_heading(name.replace(".docx", ""), level=1)
+            doc.add_paragraph("Start drafting your document here...")
+            buf = io.BytesIO()
+            doc.save(buf)
+            content_bytes = buf.getvalue()
+            content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        elif ext == ".xlsx":
+            import openpyxl
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Sheet1"
+            ws["A1"] = "Title"
+            ws["B1"] = name.replace(".xlsx", "")
+            buf = io.BytesIO()
+            wb.save(buf)
+            content_bytes = buf.getvalue()
+            content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        elif ext == ".pptx":
+            from pptx import Presentation
+            prs = Presentation()
+            title_slide_layout = prs.slide_layouts[0]
+            slide = prs.slides.add_slide(title_slide_layout)
+            title = slide.shapes.title
+            subtitle = slide.placeholders[1]
+            title.text = name.replace(".pptx", "")
+            subtitle.text = "Created in EthioOffice"
+            buf = io.BytesIO()
+            prs.save(buf)
+            content_bytes = buf.getvalue()
+            content_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        else:
+            content_bytes = f"# {name}\n\nStart typing here...\n".encode("utf-8")
+            content_type = "text/plain"
+
+        return StorageService.upload_file_stream(
+            db=db,
+            org_id=current_user.organization_id,
+            user=current_user,
+            stream=io.BytesIO(content_bytes),
+            filename=filename,
+            content_type=content_type,
+            parent_id=payload.parent_id,
+            drive_type=payload.drive_type,
+            department_id=payload.department_id,
+        )
+    except LicenseReadOnlyLockdownError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
+    except FileLockedError as e:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": "FILE_LOCKED", "message": str(e), "locked_by": getattr(e, 'locked_by_name', None)})
+    except StorageQuotaExceededError as e:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(e))
+    except FileItemConflictError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except StorageDomainError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

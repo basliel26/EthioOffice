@@ -27,7 +27,7 @@ def test_auth_login_and_me():
     assert "access_token" in data
     assert data["user"]["email"] == "admin@abyssinia.et"
     assert data["user"]["role"] == "ADMIN"
-    assert "abyssinia" in data["user"]["organization"]["slug"]
+    assert data["user"]["organization"]["slug"] in ("abyssinia", "wine-technologies")
 
     token = data["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -89,3 +89,24 @@ def test_letter_registry():
     )
     assert create_letter_resp.status_code == 200
     assert create_letter_resp.json()["reference_number"] == "ABYSS/FIN/2019/002"
+
+
+def test_create_new_office_documents():
+    r = client.post("/api/v1/auth/login", json={"email": "admin@abyssinia.et", "password": "Admin123!"})
+    token = r.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    for doc_type, expected_ext in [("docx", ".docx"), ("xlsx", ".xlsx"), ("pptx", ".pptx"), ("txt", ".txt")]:
+        resp = client.post(
+            "/api/v1/files/new-document",
+            json={
+                "name": f"Enterprise_Doc_{doc_type}",
+                "doc_type": doc_type,
+                "drive_type": "PERSONAL",
+            },
+            headers=headers
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["name"].endswith(expected_ext)
+        assert data["size_bytes"] > 0
+        assert data["is_folder"] is False

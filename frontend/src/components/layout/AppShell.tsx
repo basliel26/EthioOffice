@@ -352,7 +352,7 @@ export const AppShell: React.FC = () => {
         </header>
 
         {/* Page Content Canvas */}
-        <main className="flex-1 p-3 sm:p-5 md:p-6 overflow-y-auto min-w-0">
+        <main className="flex-1 pt-2 sm:pt-3 px-3 sm:px-6 pb-6 overflow-y-auto min-w-0">
           <Outlet />
         </main>
       </div>

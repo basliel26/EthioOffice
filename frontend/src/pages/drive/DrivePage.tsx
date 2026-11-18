@@ -9,6 +9,7 @@ import {
   RotateCcw,
   Star,
   Lock,
+  Clock,
   Tag as TagIcon,
   ChevronRight,
   Download,
@@ -16,6 +17,11 @@ import {
   Search,
   Check,
   Share2,
+  Home,
+  FileSpreadsheet,
+  Presentation,
+  FilePlus2,
+  ExternalLink,
 } from 'lucide-react';
 import { filesApi, tagsApi, sharesApi } from '../../api/client';
 import type { FileItem, TagItem } from '../../api/types';
@@ -43,6 +49,13 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   // Modals & form state
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  
+  // New File/Document Modal
+  const [showDocModal, setShowDocModal] = useState(false);
+  const [newDocName, setNewDocName] = useState('');
+  const [newDocType, setNewDocType] = useState<'docx' | 'xlsx' | 'pptx' | 'txt'>('docx');
+  const [isCreatingDoc, setIsCreatingDoc] = useState(false);
+
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [targetFile, setTargetFile] = useState<FileItem | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -52,6 +65,41 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   const [showShareModal, setShowShareModal] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const documentTypeOptions = [
+    {
+      id: 'docx' as const,
+      name: 'Word Document',
+      extension: '.docx',
+      description: 'Editable in Euro-Office Document Editor',
+      icon: <FileText className="w-5 h-5 text-blue-600" />,
+      badgeColor: 'bg-blue-100 text-blue-700',
+    },
+    {
+      id: 'xlsx' as const,
+      name: 'Excel Spreadsheet',
+      extension: '.xlsx',
+      description: 'Editable in Euro-Office Sheets',
+      icon: <FileSpreadsheet className="w-5 h-5 text-emerald-600" />,
+      badgeColor: 'bg-emerald-100 text-emerald-700',
+    },
+    {
+      id: 'pptx' as const,
+      name: 'PowerPoint Presentation',
+      extension: '.pptx',
+      description: 'Editable in Euro-Office Slides',
+      icon: <Presentation className="w-5 h-5 text-amber-600" />,
+      badgeColor: 'bg-amber-100 text-amber-700',
+    },
+    {
+      id: 'txt' as const,
+      name: 'Plain Text Document',
+      extension: '.txt',
+      description: 'Simple plain text note file',
+      icon: <FileText className="w-5 h-5 text-slate-600" />,
+      badgeColor: 'bg-slate-100 text-slate-700',
+    },
+  ];
 
   const loadData = async () => {
     setIsLoading(true);
@@ -99,6 +147,32 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       loadData();
     } catch {
       // ignore
+    }
+  };
+
+  const handleCreateDocument = async (e: React.FormEvent, openInEditor: boolean = false) => {
+    e.preventDefault();
+    if (!newDocName.trim()) return;
+
+    setIsCreatingDoc(true);
+    try {
+      const driveType = viewMode === 'COMPANY' ? 'COMPANY' : 'PERSONAL';
+      const created = await filesApi.createDocument({
+        name: newDocName.trim(),
+        doc_type: newDocType,
+        drive_type: driveType,
+        parent_id: currentFolderId || undefined,
+      });
+      setNewDocName('');
+      setShowDocModal(false);
+      await loadData();
+      if (openInEditor) {
+        navigate(`/editor/${created.id}`);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsCreatingDoc(false);
     }
   };
 
@@ -213,40 +287,55 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   });
 
   return (
-    <div className="space-y-5 select-none font-sans">
+    <div className="space-y-4 select-none font-sans">
       {/* Top Action & Breadcrumbs Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200/80">
-        {/* Windows Explorer Style Path Breadcrumbs */}
-        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium overflow-x-auto py-1">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
+        {/* Windows Explorer Style Address / Breadcrumbs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
           {viewMode !== 'STARRED' && viewMode !== 'RECENT' ? (
             breadcrumbs.map((b, idx) => (
               <React.Fragment key={b.name + idx}>
-                {idx > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+                {idx > 0 && <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
                 <button
                   onClick={() => handleNavigateBreadcrumb(idx)}
-                  className={`hover:text-blue-600 transition-colors whitespace-nowrap ${
+                  className={`hover:text-blue-600 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
                     idx === breadcrumbs.length - 1
-                      ? 'font-bold text-slate-900 text-sm'
-                      : 'text-slate-500'
+                      ? 'text-slate-900 font-extrabold text-base sm:text-lg tracking-tight'
+                      : 'text-slate-500 font-medium text-sm sm:text-base'
                   }`}
                 >
-                  {b.name}
+                  {idx === 0 && <Home className="w-4 h-4 text-blue-600 shrink-0" />}
+                  <span>{b.name}</span>
                 </button>
               </React.Fragment>
             ))
           ) : (
-            <span className="font-bold text-slate-900 text-sm">
-              {viewMode === 'STARRED' ? 'Starred Documents' : 'Recent Activity'}
-            </span>
+            <div className="flex items-center gap-2">
+              {viewMode === 'STARRED' ? (
+                <>
+                  <Star className="w-5 h-5 text-amber-500 fill-amber-400 shrink-0" />
+                  <span className="font-extrabold text-slate-900 text-base sm:text-lg tracking-tight">
+                    Starred Documents
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Clock className="w-5 h-5 text-blue-600 shrink-0" />
+                  <span className="font-extrabold text-slate-900 text-base sm:text-lg tracking-tight">
+                    Recent Activity
+                  </span>
+                </>
+              )}
+            </div>
           )}
         </div>
 
         {/* Action Buttons & In-Folder Search */}
         <div className="flex items-center gap-2 flex-wrap">
           {viewMode !== 'TRASH' && (
-            <div className="w-44 sm:w-52 hidden md:block">
+            <div className="w-40 sm:w-48 hidden md:block">
               <Input
-                placeholder="Search in this folder..."
+                placeholder="Search in folder..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 leftIcon={<Search className="w-3.5 h-3.5 text-slate-400" />}
@@ -266,6 +355,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
             </Button>
           ) : (
             <>
+              {/* New Folder Button */}
               <Button
                 variant="subtle"
                 size="sm"
@@ -274,13 +364,29 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
               >
                 New Folder
               </Button>
+
+              {/* New Document File Button */}
+              <Button
+                variant="subtle"
+                size="sm"
+                leftIcon={<FilePlus2 className="w-4 h-4 text-blue-600" />}
+                onClick={() => {
+                  setNewDocName('');
+                  setNewDocType('docx');
+                  setShowDocModal(true);
+                }}
+              >
+                New Document
+              </Button>
+
+              {/* Upload File Button */}
               <Button
                 variant="primary"
                 size="sm"
                 leftIcon={<Upload className="w-4 h-4" />}
                 onClick={() => fileInputRef.current?.click()}
               >
-                Upload File
+                Upload
               </Button>
               <input
                 ref={fileInputRef}
@@ -332,7 +438,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
           <div className="py-20 text-center space-y-2">
             <Folder className="w-10 h-10 text-slate-300 mx-auto" />
             <p className="text-sm font-bold text-slate-800">This folder is empty</p>
-            <p className="text-xs text-slate-400">Upload a document or create a new folder to get started.</p>
+            <p className="text-xs text-slate-400">Upload a document or create a new file or folder to get started.</p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
@@ -536,7 +642,100 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         </form>
       </Modal>
 
-      {/* 2. Rename Modal */}
+      {/* 2. Create New Document Modal (Windows Explorer / EuroOffice Style) */}
+      <Modal
+        isOpen={showDocModal}
+        onClose={() => setShowDocModal(false)}
+        title="Create New Document"
+        maxWidth="lg"
+      >
+        <form onSubmit={(e) => handleCreateDocument(e, false)} className="space-y-4">
+          {/* Document Type Selector Cards */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-slate-700">
+              Select Document Format:
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {documentTypeOptions.map((opt) => {
+                const isSelected = newDocType === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setNewDocType(opt.id)}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      isSelected
+                        ? 'border-blue-600 bg-blue-50/80 shadow-2xs ring-1 ring-blue-500'
+                        : 'border-slate-200/80 hover:bg-slate-50 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        {opt.icon}
+                        <span className="font-bold text-slate-900 text-xs sm:text-sm">
+                          {opt.name}
+                        </span>
+                      </div>
+                      <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md ${opt.badgeColor}`}>
+                        {opt.extension}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-medium">
+                      {opt.description}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Document Name Input */}
+          <div className="space-y-1.5 pt-2">
+            <label className="block text-xs font-bold text-slate-700">
+              Document Name:
+            </label>
+            <Input
+              placeholder="e.g. Quarterly Strategy Plan"
+              value={newDocName}
+              onChange={(e) => setNewDocName(e.target.value)}
+              required
+              autoFocus
+            />
+            {newDocName.trim() && (
+              <p className="text-[11px] text-slate-500 font-medium">
+                Will be saved as: <span className="font-mono font-bold text-blue-600">{newDocName.trim().endsWith(`.${newDocType}`) ? newDocName.trim() : `${newDocName.trim()}.${newDocType}`}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+            <Button variant="ghost" type="button" onClick={() => setShowDocModal(false)}>
+              Cancel
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="subtle"
+                type="submit"
+                isLoading={isCreatingDoc}
+              >
+                Create
+              </Button>
+              <Button
+                variant="primary"
+                type="button"
+                onClick={(e) => handleCreateDocument(e, true)}
+                isLoading={isCreatingDoc}
+                leftIcon={<ExternalLink className="w-3.5 h-3.5" />}
+              >
+                Create & Open
+              </Button>
+            </div>
+          </div>
+        </form>
+      </Modal>
+
+      {/* 3. Rename Modal */}
       <Modal
         isOpen={showRenameModal}
         onClose={() => setShowRenameModal(false)}
@@ -560,7 +759,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         </form>
       </Modal>
 
-      {/* 3. Assign Tags Modal */}
+      {/* 4. Assign Tags Modal */}
       <Modal
         isOpen={showTagModal}
         onClose={() => setShowTagModal(false)}
@@ -607,7 +806,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         </div>
       </Modal>
 
-      {/* 4. Empty Recycle Bin Confirmation Modal */}
+      {/* 5. Empty Recycle Bin Confirmation Modal */}
       <Modal
         isOpen={showEmptyTrashModal}
         onClose={() => setShowEmptyTrashModal(false)}
@@ -624,7 +823,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         </div>
       </Modal>
 
-      {/* 5. Document & Folder Sharing Modal */}
+      {/* 6. Document & Folder Sharing Modal */}
       <ShareModal
         isOpen={showShareModal}
         onClose={() => {

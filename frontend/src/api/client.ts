@@ -149,6 +149,15 @@ export const filesApi = {
     });
     return res.data;
   },
+  createDocument: async (data: {
+    name: string;
+    doc_type: 'docx' | 'xlsx' | 'pptx' | 'txt';
+    drive_type?: 'PERSONAL' | 'COMPANY';
+    parent_id?: string;
+  }): Promise<FileItem> => {
+    const res = await api.post<FileItem>('/files/new-document', data);
+    return res.data;
+  },
   rename: async (fileId: string, new_name: string): Promise<FileItem> => {
     const res = await api.patch<FileItem>(`/files/${fileId}/rename`, { new_name });
     return res.data;

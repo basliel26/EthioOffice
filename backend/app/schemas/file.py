@@ -19,6 +19,14 @@ class FolderCreate(BaseModel):
     drive_type: str = "PERSONAL"  # 'PERSONAL' or 'COMPANY'
 
 
+class NewDocumentCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    doc_type: str = Field(..., pattern="^(docx|xlsx|pptx|txt)$")
+    parent_id: Optional[uuid.UUID] = None
+    department_id: Optional[uuid.UUID] = None
+    drive_type: str = "PERSONAL"
+
+
 class FileMoveRequest(BaseModel):
     new_parent_id: Optional[uuid.UUID] = None
 
