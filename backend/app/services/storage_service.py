@@ -11,7 +11,7 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Optional, List, Tuple, BinaryIO, Set
 from collections import deque
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, func
 
 from app.core.config import settings
@@ -22,6 +22,7 @@ from app.models.user import User, UserRole
 from app.models.department import Department
 from app.models.audit import AuditLog, AuditAction
 from app.models.favorite import UserFavorite
+from app.models.tag import FileTag
 from app.services.tenant_service import TenantService, StorageQuotaExceededError
 from app.services.capability_service import CapabilityService, LicenseReadOnlyLockdownError
 from app.core.ethiopian_calendar import format_ethiopian_date
@@ -209,7 +210,14 @@ storage_provider = LocalStorageProvider(settings.STORAGE_ROOT)
 
 class StorageService:
     @classmethod
-    def to_file_response(cls, db: Session, item: FileItem, current_user: Optional[User] = None) -> FileItemResponse:
+    def to_file_response(
+        cls,
+        db: Session,
+        item: FileItem,
+        current_user: Optional[User] = None,
+        precomputed_counts: Optional[Tuple[int, int]] = None,
+        is_starred_precomputed: Optional[bool] = None,
+    ) -> FileItemResponse:
         """Converts ORM entity to API response model with calculated counts, lock status, star status, and tags."""
         is_locked = False
         lock_info = None
@@ -222,30 +230,36 @@ class StorageService:
                 expires_at=item.lock.expires_at,
             )
 
-        subfolder_count = 0
-        file_count = 0
-        if item.is_folder:
-            subfolder_count = db.query(FileItem).filter(
-                FileItem.parent_id == item.id,
-                FileItem.is_folder == True,
-                FileItem.is_deleted == False
-            ).count()
-            file_count = db.query(FileItem).filter(
-                FileItem.parent_id == item.id,
-                FileItem.is_folder == False,
-                FileItem.is_deleted == False
-            ).count()
+        if precomputed_counts is not None:
+            subfolder_count, file_count = precomputed_counts
+        else:
+            subfolder_count = 0
+            file_count = 0
+            if item.is_folder:
+                subfolder_count = db.query(FileItem).filter(
+                    FileItem.parent_id == item.id,
+                    FileItem.is_folder == True,
+                    FileItem.is_deleted == False
+                ).count()
+                file_count = db.query(FileItem).filter(
+                    FileItem.parent_id == item.id,
+                    FileItem.is_folder == False,
+                    FileItem.is_deleted == False
+                ).count()
 
         ec_date = format_ethiopian_date(item.created_at.date()) if item.created_at else None
 
         # Check starred status
-        is_starred = False
-        if current_user:
-            fav = db.query(UserFavorite).filter(
-                UserFavorite.user_id == current_user.id,
-                UserFavorite.file_id == item.id,
-            ).first()
-            is_starred = fav is not None
+        if is_starred_precomputed is not None:
+            is_starred = is_starred_precomputed
+        else:
+            is_starred = False
+            if current_user:
+                fav = db.query(UserFavorite).filter(
+                    UserFavorite.user_id == current_user.id,
+                    UserFavorite.file_id == item.id,
+                ).first()
+                is_starred = fav is not None
 
         # Collect tags
         tags_list = []
@@ -351,8 +365,53 @@ class StorageService:
                 else:
                     query = query.filter(FileItem.parent_id == None)
 
+        query = query.options(
+            joinedload(FileItem.lock).joinedload(FileLock.locked_by),
+            joinedload(FileItem.tags).joinedload(FileTag.tag),
+            joinedload(FileItem.owner)
+        )
         items = query.order_by(FileItem.is_folder.desc(), FileItem.name.asc()).all()
-        return [cls.to_file_response(db, i, current_user=user) for i in items]
+
+        # Precompute folder child counts in a single bulk query
+        folder_ids = [i.id for i in items if i.is_folder]
+        folder_counts = {}
+        if folder_ids:
+            counts = db.query(
+                FileItem.parent_id,
+                FileItem.is_folder,
+                func.count(FileItem.id)
+            ).filter(
+                FileItem.parent_id.in_(folder_ids),
+                FileItem.is_deleted == False
+            ).group_by(FileItem.parent_id, FileItem.is_folder).all()
+            for pid, is_f, cnt in counts:
+                if pid not in folder_counts:
+                    folder_counts[pid] = [0, 0]
+                if is_f:
+                    folder_counts[pid][0] = cnt
+                else:
+                    folder_counts[pid][1] = cnt
+
+        # Precompute starred status in a single bulk query
+        item_ids = [i.id for i in items]
+        starred_ids = set()
+        if item_ids and user:
+            favs = db.query(UserFavorite.file_id).filter(
+                UserFavorite.user_id == user.id,
+                UserFavorite.file_id.in_(item_ids)
+            ).all()
+            starred_ids = {f[0] for f in favs}
+
+        return [
+            cls.to_file_response(
+                db,
+                i,
+                current_user=user,
+                precomputed_counts=tuple(folder_counts.get(i.id, [0, 0])) if i.is_folder else (0, 0),
+                is_starred_precomputed=(i.id in starred_ids),
+            )
+            for i in items
+        ]
 
     @classmethod
     def create_folder(

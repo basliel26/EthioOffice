@@ -10,7 +10,6 @@ import {
   Star,
   Lock,
   Clock,
-  Home,
   Tag as TagIcon,
   ChevronRight,
   ChevronDown,
@@ -40,10 +39,17 @@ interface DrivePageProps {
   viewMode?: 'PERSONAL' | 'COMPANY' | 'SHARED' | 'STARRED' | 'RECENT' | 'TRASH';
 }
 
+// Instant client-side cache for 0ms partition switching & folder browsing
+const driveMemoryCache = new Map<string, FileItem[]>();
+const tagsMemoryCache: { data: TagItem[] | null; timestamp: number } = { data: null, timestamp: 0 };
+
 export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) => {
   const navigate = useNavigate();
-  const [files, setFiles] = useState<FileItem[]>([]);
-  const [availableTags, setAvailableTags] = useState<TagItem[]>([]);
+  const initialKey = `${viewMode}_root`;
+  const initialCached = driveMemoryCache.get(initialKey);
+
+  const [files, setFiles] = useState<FileItem[]>(initialCached || []);
+  const [availableTags, setAvailableTags] = useState<TagItem[]>(tagsMemoryCache.data || []);
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
 
@@ -68,13 +74,21 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   const [breadcrumbs, setBreadcrumbs] = useState<Array<{ id: string | null; name: string }>>([
     { id: null, name: getRootBreadcrumbName(viewMode) },
   ]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(!initialCached);
   const requestIdRef = useRef(0);
   const { setSearchScope, clearSearchScope } = useSearchScope();
 
   // Reset folder navigation & breadcrumbs when switching between drive views
   useEffect(() => {
-    setFiles([]);
+    const key = `${viewMode}_root`;
+    const cached = driveMemoryCache.get(key);
+    if (cached) {
+      setFiles(cached);
+      setIsLoading(false);
+    } else {
+      setFiles([]);
+      setIsLoading(true);
+    }
     setCurrentFolderId(null);
     setBreadcrumbs([{ id: null, name: getRootBreadcrumbName(viewMode) }]);
     setSelectedTagFilter(null);
@@ -246,30 +260,44 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
 
   const loadData = async (folderId: string | null = currentFolderId) => {
     const reqId = ++requestIdRef.current;
-    setIsLoading(true);
+    const key = `${viewMode}_${folderId || 'root'}`;
+
+    if (!driveMemoryCache.has(key)) {
+      setIsLoading(true);
+    }
+
     try {
-      let data: FileItem[] = [];
+      let fetchPromise: Promise<FileItem[]>;
       if (viewMode === 'STARRED') {
-        data = await filesApi.listStarred();
+        fetchPromise = filesApi.listStarred();
       } else if (viewMode === 'RECENT') {
-        const recent = await filesApi.getRecent(30);
-        data = recent.map((r) => r.file);
+        fetchPromise = filesApi.getRecent(30).then((r) => r.map((item) => item.file));
       } else if (viewMode === 'TRASH') {
-        data = await filesApi.list('TRASH', folderId || undefined);
+        fetchPromise = filesApi.list('TRASH', folderId || undefined);
       } else if (viewMode === 'SHARED') {
-        data = await sharesApi.listSharedWithMe();
+        fetchPromise = sharesApi.listSharedWithMe();
       } else {
         const driveType = viewMode === 'COMPANY' ? 'COMPANY' : 'PERSONAL';
-        data = await filesApi.list(driveType, folderId || undefined);
+        fetchPromise = filesApi.list(driveType, folderId || undefined);
       }
+
+      let tagsPromise: Promise<TagItem[]>;
+      if (tagsMemoryCache.data && Date.now() - tagsMemoryCache.timestamp < 60000) {
+        tagsPromise = Promise.resolve(tagsMemoryCache.data);
+      } else {
+        tagsPromise = tagsApi.list().then((tags) => {
+          tagsMemoryCache.data = tags;
+          tagsMemoryCache.timestamp = Date.now();
+          return tags;
+        });
+      }
+
+      const [data, tags] = await Promise.all([fetchPromise, tagsPromise]);
 
       if (reqId !== requestIdRef.current) return;
+      driveMemoryCache.set(key, data);
       setFiles(data);
-
-      const tags = await tagsApi.list();
-      if (reqId === requestIdRef.current) {
-        setAvailableTags(tags);
-      }
+      setAvailableTags(tags);
     } catch {
       // ignore
     } finally {
@@ -292,6 +320,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       await filesApi.createFolder(newFolderName.trim(), driveType, currentFolderId || undefined);
       setNewFolderName('');
       setShowFolderModal(false);
+      driveMemoryCache.clear();
       loadData();
     } catch {
       // ignore
@@ -313,6 +342,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       });
       setNewDocName('');
       setShowDocModal(false);
+      driveMemoryCache.clear();
       await loadData();
       if (openInEditor) {
         navigate(`/editor/${created.id}`);
@@ -343,6 +373,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         drive_type: driveType,
         parent_id: currentFolderId || undefined,
       });
+      driveMemoryCache.clear();
       await loadData();
       navigate(`/editor/${created.id}`);
     } catch {
@@ -360,6 +391,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       const driveType = viewMode === 'COMPANY' ? 'COMPANY' : 'PERSONAL';
       await filesApi.upload(file, driveType, currentFolderId || undefined);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      driveMemoryCache.clear();
       loadData();
     } catch {
       // ignore
@@ -373,6 +405,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       } else {
         await filesApi.star(file.id);
       }
+      driveMemoryCache.clear();
       loadData();
     } catch {
       // ignore
@@ -386,6 +419,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       } else {
         await filesApi.delete(file.id, false);
       }
+      driveMemoryCache.clear();
       loadData();
     } catch {
       // ignore
@@ -395,6 +429,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   const handleRestore = async (file: FileItem) => {
     try {
       await filesApi.restore(file.id);
+      driveMemoryCache.clear();
       loadData();
     } catch {
       // ignore
@@ -405,6 +440,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     try {
       await filesApi.emptyTrash();
       setShowEmptyTrashModal(false);
+      driveMemoryCache.clear();
       loadData();
     } catch {
       // ignore
@@ -419,6 +455,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       await filesApi.rename(targetFile.id, renameValue.trim());
       setShowRenameModal(false);
       setTargetFile(null);
+      driveMemoryCache.clear();
       loadData();
     } catch {
       // ignore
@@ -432,6 +469,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       await filesApi.assignTags(targetFile.id, selectedTagIds);
       setShowTagModal(false);
       setTargetFile(null);
+      driveMemoryCache.clear();
       loadData();
     } catch {
       // ignore
@@ -439,14 +477,30 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   };
 
   const handleOpenFolder = (folder: FileItem) => {
-    setFiles([]);
+    const key = `${viewMode}_${folder.id}`;
+    const cached = driveMemoryCache.get(key);
+    if (cached) {
+      setFiles(cached);
+      setIsLoading(false);
+    } else {
+      setFiles([]);
+      setIsLoading(true);
+    }
     setCurrentFolderId(folder.id);
     setBreadcrumbs((prev) => [...prev, { id: folder.id, name: folder.name }]);
   };
 
   const handleNavigateBreadcrumb = (index: number) => {
     const target = breadcrumbs[index];
-    setFiles([]);
+    const key = `${viewMode}_${target.id || 'root'}`;
+    const cached = driveMemoryCache.get(key);
+    if (cached) {
+      setFiles(cached);
+      setIsLoading(false);
+    } else {
+      setFiles([]);
+      setIsLoading(true);
+    }
     setCurrentFolderId(target.id);
     setBreadcrumbs((prev) => prev.slice(0, index + 1));
   };
@@ -687,15 +741,12 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                 {idx > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
                 <button
                   onClick={() => handleNavigateBreadcrumb(idx)}
-                  className={`transition-colors whitespace-nowrap text-[13px] sm:text-[14px] md:text-[16px] lg:text-[18px] font-normal flex items-center gap-1.5 ${
+                  className={`transition-colors whitespace-nowrap text-[13px] sm:text-[14px] md:text-[16px] lg:text-[18px] font-normal ${
                     idx === breadcrumbs.length - 1
                       ? 'text-slate-800 cursor-default'
                       : 'text-slate-400 hover:text-slate-700'
                   }`}
                 >
-                  {idx === 0 && (b.name === 'Home' || b.name === 'Shared') && (
-                    <Home className="w-4 h-4 text-slate-400 shrink-0 -mt-0.5" />
-                  )}
                   <span>{b.name}</span>
                 </button>
               </React.Fragment>
