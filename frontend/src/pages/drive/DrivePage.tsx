@@ -10,6 +10,7 @@ import {
   Star,
   Lock,
   Clock,
+  Home,
   Tag as TagIcon,
   ChevronRight,
   ChevronDown,
@@ -49,18 +50,18 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   const getRootBreadcrumbName = (mode: string) => {
     switch (mode) {
       case 'COMPANY':
-        return 'Company Drive';
+        return 'Home';
       case 'SHARED':
-        return 'Shared with me';
+        return 'Shared';
       case 'TRASH':
-        return 'Recycle Bin';
+        return 'Deleted Items';
       case 'STARRED':
-        return 'Starred Documents';
+        return 'Favorites';
       case 'RECENT':
-        return 'Recent Activity';
+        return 'Recent Files';
       case 'PERSONAL':
       default:
-        return 'Personal Drive';
+        return 'Home';
     }
   };
 
@@ -686,12 +687,15 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                 {idx > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
                 <button
                   onClick={() => handleNavigateBreadcrumb(idx)}
-                  className={`transition-colors whitespace-nowrap text-[13px] sm:text-[14px] md:text-[16px] lg:text-[18px] font-normal ${
+                  className={`transition-colors whitespace-nowrap text-[13px] sm:text-[14px] md:text-[16px] lg:text-[18px] font-normal flex items-center gap-1.5 ${
                     idx === breadcrumbs.length - 1
                       ? 'text-slate-800 cursor-default'
                       : 'text-slate-400 hover:text-slate-700'
                   }`}
                 >
+                  {idx === 0 && (b.name === 'Home' || b.name === 'Shared') && (
+                    <Home className="w-4 h-4 text-slate-400 shrink-0 -mt-0.5" />
+                  )}
                   <span>{b.name}</span>
                 </button>
               </React.Fragment>
@@ -702,14 +706,14 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                 <>
                   <Star className="w-4 h-4 text-amber-500 fill-amber-400 shrink-0" />
                   <span className="text-slate-800 text-[13px] sm:text-[14px] md:text-[16px] lg:text-[18px] font-normal">
-                    Starred Documents
+                    Favorites & Starred
                   </span>
                 </>
               ) : (
                 <>
                   <Clock className="w-4 h-4 text-blue-600 shrink-0" />
                   <span className="text-slate-800 text-[13px] sm:text-[14px] md:text-[16px] lg:text-[18px] font-normal">
-                    Recent Activity
+                    Recent Files
                   </span>
                 </>
               )}
