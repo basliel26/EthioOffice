@@ -331,8 +331,12 @@ export const lettersApi = {
 // 7. Full-Text Search API
 // -------------------------------------------------------------
 export const searchApi = {
-  unified: async (q: string): Promise<{ documents: FileItem[]; letters: LetterRecord[] }> => {
-    const res = await api.get<{ documents: FileItem[]; letters: LetterRecord[] }>(`/search/unified?q=${encodeURIComponent(q)}`);
+  unified: async (q: string, folder_id?: string | null): Promise<{ documents: FileItem[]; letters: LetterRecord[] }> => {
+    let url = `/search/unified?q=${encodeURIComponent(q)}`;
+    if (folder_id) {
+      url += `&folder_id=${encodeURIComponent(folder_id)}`;
+    }
+    const res = await api.get<{ documents: FileItem[]; letters: LetterRecord[] }>(url);
     return res.data;
   },
   autocomplete: async (q: string): Promise<string[]> => {

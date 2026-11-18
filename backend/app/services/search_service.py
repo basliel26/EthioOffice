@@ -274,6 +274,7 @@ class SearchService:
         owner_id: Optional[uuid.UUID] = None,
         drive_type: Optional[DriveType] = None,
         tag: Optional[str] = None,
+        folder_id: Optional[uuid.UUID] = None,
         date_from_gc: Optional[date] = None,
         date_to_gc: Optional[date] = None,
         ethiopian_year: Optional[int] = None,
@@ -393,6 +394,9 @@ class SearchService:
 
         if drive_type:
             base_query = base_query.filter(FileItem.drive_type == drive_type)
+
+        if folder_id:
+            base_query = base_query.filter(FileItem.parent_id == folder_id)
 
         if tag:
             norm_tag = LocalizationService.normalize_amharic(tag.strip())
@@ -641,41 +645,45 @@ class SearchService:
         db: Session,
         user: User,
         query: str,
+        folder_id: Optional[uuid.UUID] = None,
         limit: int = 20,
     ) -> UnifiedSearchResult:
         """
         Unified search across Document Drive files AND Official Letter Registry.
+        When folder_id is provided, search is narrowed specifically to that folder.
         """
         # 1. Search Files
         files_resp = cls.search_files(
             db=db,
             user=user,
             query=query,
+            folder_id=folder_id,
             limit=limit,
         )
 
-        # 2. Search Letters
-        letters_resp = LetterService.list_letters(
-            db=db,
-            user=user,
-            search=query,
-            limit=limit,
-        )
-
-        letters_data = [
-            {
-                "id": str(l.id),
-                "reference_number": l.reference_number,
-                "direction": l.direction.value,
-                "status": l.status.value,
-                "subject": l.subject,
-                "sender_entity": l.sender_entity,
-                "recipient_entity": l.recipient_entity,
-                "date_ec": l.date_ec,
-                "date_gc": l.date_gc.isoformat(),
-            }
-            for l in letters_resp
-        ]
+        # 2. Search Letters (only when not scoped to a specific folder)
+        letters_data = []
+        if not folder_id:
+            letters_resp = LetterService.list_letters(
+                db=db,
+                user=user,
+                search=query,
+                limit=limit,
+            )
+            letters_data = [
+                {
+                    "id": str(l.id),
+                    "reference_number": l.reference_number,
+                    "direction": l.direction.value,
+                    "status": l.status.value,
+                    "subject": l.subject,
+                    "sender_entity": l.sender_entity,
+                    "recipient_entity": l.recipient_entity,
+                    "date_ec": l.date_ec,
+                    "date_gc": l.date_gc.isoformat(),
+                }
+                for l in letters_resp
+            ]
 
         total = files_resp.total_hits + len(letters_data)
 

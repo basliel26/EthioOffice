@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useSearchScope } from '../../context/SearchContext';
 import { filesApi } from '../../api/client';
 import { NotificationDropdown } from './NotificationDropdown';
 import { DualCalendarDropdown } from './DualCalendarDropdown';
@@ -26,6 +27,7 @@ import type { StorageAnalytics } from '../../api/types';
 
 export const AppShell: React.FC = () => {
   const { user, logout } = useAuth();
+  const { scope } = useSearchScope();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -320,8 +322,17 @@ export const AppShell: React.FC = () => {
             >
               <div className="flex items-center gap-2 truncate min-w-0">
                 <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <span className="truncate hidden md:inline">Search documents, files, letters...</span>
-                <span className="truncate md:hidden">Search...</span>
+                {scope.folderId && scope.folderName ? (
+                  <>
+                    <span className="truncate hidden md:inline text-blue-600 font-medium">Search in &quot;{scope.folderName}&quot;...</span>
+                    <span className="truncate md:hidden text-blue-600 font-medium">Search folder...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="truncate hidden md:inline">Search documents, files, letters...</span>
+                    <span className="truncate md:hidden">Search...</span>
+                  </>
+                )}
               </div>
               <kbd className="hidden lg:inline-block text-[10px] bg-white text-slate-400 px-1.5 py-0.5 rounded-md shadow-2xs font-mono ml-2 border border-slate-200/60 shrink-0">
                 Ctrl+K
@@ -352,7 +363,7 @@ export const AppShell: React.FC = () => {
         </header>
 
         {/* Page Content Canvas */}
-        <main className="flex-1 pt-2 sm:pt-3 px-3 sm:px-6 pb-6 overflow-y-auto min-w-0">
+        <main className="flex-1 pt-1 sm:pt-1.5 px-3 sm:px-6 pb-6 overflow-y-auto min-w-0">
           <Outlet />
         </main>
       </div>

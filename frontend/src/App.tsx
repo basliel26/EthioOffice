@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SearchProvider } from './context/SearchContext';
 import { AppShell } from './components/layout/AppShell';
 import { CommandPalette } from './components/search/CommandPalette';
 import { LoginPage } from './pages/auth/LoginPage';
@@ -59,8 +60,9 @@ const ProtectedEditorRoute: React.FC = () => {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
+      <SearchProvider>
+        <BrowserRouter>
+          <Routes>
           {/* Public Portal & Auth Routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterOrgPage />} />
@@ -100,6 +102,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>
+      </SearchProvider>
     </AuthProvider>
   );
 }

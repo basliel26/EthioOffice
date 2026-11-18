@@ -96,17 +96,20 @@ def get_search_statistics(
 @router.get("/unified", response_model=UnifiedSearchResult)
 def unified_search(
     q: str = Query(..., min_length=1, description="Query to search across Document Drive files AND Letter Registry"),
+    folder_id: Optional[uuid.UUID] = Query(None, description="Scope search to a specific parent folder"),
     limit: int = Query(20, ge=1, le=50),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Cross-module enterprise search across Document Drive and Official Letter Registry.
+    When folder_id is supplied, the search is narrowed specifically to that folder.
     """
     return SearchService.unified_search(
         db=db,
         user=current_user,
         query=q,
+        folder_id=folder_id,
         limit=limit,
     )
 
