@@ -71,7 +71,7 @@ export const AppShell: React.FC = () => {
   };
 
   const navItemClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-150 select-none ${
+    `flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-xl transition-all duration-150 select-none ${
       isCollapsed ? 'md:justify-center md:px-2 md:py-2.5' : ''
     } ${
       isActive
@@ -122,18 +122,15 @@ export const AppShell: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsCollapsed(!isCollapsed)}
-                className="w-9 h-9 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200/80 text-blue-600 flex items-center justify-center font-bold text-xs tracking-wider shrink-0 shadow-xs transition-all active:scale-95 cursor-pointer focus:outline-none"
+                className="w-10 h-10 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200/80 text-blue-600 flex items-center justify-center font-bold text-xs tracking-wider shrink-0 shadow-xs transition-all active:scale-95 cursor-pointer focus:outline-none"
                 title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               >
                 <FolderKanban className="w-5 h-5 text-blue-600" />
               </button>
               <div className={`min-w-0 flex-1 ${isCollapsed ? 'md:hidden' : ''}`}>
-                <h2 className="text-sm font-bold text-slate-900 truncate tracking-tight">
+                <h2 className="text-base sm:text-lg font-bold text-slate-900 truncate tracking-tight font-sans">
                   {user?.organization.name || 'Wine Technologies'}
                 </h2>
-                <p className="text-[11px] text-slate-400 font-medium truncate">
-                  {user?.organization.slug ? `@${user.organization.slug}` : 'Private Workspace'}
-                </p>
               </div>
             </div>
 
@@ -152,32 +149,32 @@ export const AppShell: React.FC = () => {
           <div className="p-3 space-y-6 overflow-y-auto max-h-[calc(100vh-220px)]">
             {/* Drive Section */}
             <div>
-              <p className={`px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 ${isCollapsed ? 'md:hidden' : ''}`}>
+              <p className={`px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5 ${isCollapsed ? 'md:hidden' : ''}`}>
                 Drive & Files
               </p>
-              <nav className="space-y-0.5">
+              <nav className="space-y-1">
                 <NavLink to="/drive/personal" className={navItemClass} title="Personal Drive">
-                  <HardDrive className="w-4 h-4 shrink-0" />
+                  <HardDrive className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Personal Drive</span>
                 </NavLink>
                 <NavLink to="/drive/company" className={navItemClass} title="Company Drive">
-                  <Building2 className="w-4 h-4 shrink-0" />
+                  <Building2 className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Company Drive</span>
                 </NavLink>
                 <NavLink to="/drive/shared" className={navItemClass} title="Shared with me">
-                  <Share2 className="w-4 h-4 shrink-0" />
+                  <Share2 className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Shared with me</span>
                 </NavLink>
                 <NavLink to="/drive/starred" className={navItemClass} title="Starred">
-                  <Star className="w-4 h-4 shrink-0" />
+                  <Star className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Starred</span>
                 </NavLink>
                 <NavLink to="/drive/recent" className={navItemClass} title="Recent">
-                  <Clock className="w-4 h-4 shrink-0" />
+                  <Clock className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Recent</span>
                 </NavLink>
                 <NavLink to="/drive/trash" className={navItemClass} title="Trash">
-                  <Trash2 className="w-4 h-4 shrink-0" />
+                  <Trash2 className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Trash</span>
                 </NavLink>
               </nav>
@@ -185,12 +182,12 @@ export const AppShell: React.FC = () => {
 
             {/* Official Letters Section */}
             <div>
-              <p className={`px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 ${isCollapsed ? 'md:hidden' : ''}`}>
+              <p className={`px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5 ${isCollapsed ? 'md:hidden' : ''}`}>
                 Correspondence
               </p>
-              <nav className="space-y-0.5">
+              <nav className="space-y-1">
                 <NavLink to="/letters" className={navItemClass} end title="Letter Registry">
-                  <Mail className="w-4 h-4 shrink-0" />
+                  <Mail className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Letter Registry</span>
                 </NavLink>
               </nav>
@@ -199,20 +196,20 @@ export const AppShell: React.FC = () => {
             {/* Admin Section */}
             {isAdmin && (
               <div>
-                <p className={`px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 ${isCollapsed ? 'md:hidden' : ''}`}>
+                <p className={`px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5 ${isCollapsed ? 'md:hidden' : ''}`}>
                   Administration
                 </p>
-                <nav className="space-y-0.5">
+                <nav className="space-y-1">
                   <NavLink to="/admin/organization" className={navItemClass} title="Organization Profile">
-                    <Shield className="w-4 h-4 shrink-0" />
+                    <Shield className="w-[18px] h-[18px] shrink-0" />
                     <span className={isCollapsed ? 'md:hidden' : ''}>Organization Profile</span>
                   </NavLink>
                   <NavLink to="/admin/audit" className={navItemClass} title="Audit Ledger">
-                    <FileCheck className="w-4 h-4 shrink-0" />
+                    <FileCheck className="w-[18px] h-[18px] shrink-0" />
                     <span className={isCollapsed ? 'md:hidden' : ''}>Audit Ledger</span>
                   </NavLink>
                   <NavLink to="/admin/users" className={navItemClass} title="Employee Directory">
-                    <Users2 className="w-4 h-4 shrink-0" />
+                    <Users2 className="w-[18px] h-[18px] shrink-0" />
                     <span className={isCollapsed ? 'md:hidden' : ''}>Employee Directory</span>
                   </NavLink>
                 </nav>
