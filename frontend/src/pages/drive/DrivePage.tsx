@@ -1141,7 +1141,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                           e.stopPropagation();
                           handleToggleStar(file);
                         }}
-                        className={`p-1 rounded-md text-slate-300 hover:text-amber-500 transition-colors ${
+                        className={`p-1 rounded-md text-slate-300 hover:text-amber-500 transition-colors cursor-pointer ${
                           file.is_starred ? 'text-amber-400 opacity-100' : 'opacity-0 group-hover:opacity-100'
                         }`}
                         title={file.is_starred ? 'Remove Star' : 'Star Document'}
@@ -1257,7 +1257,11 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                         e.stopPropagation();
                         handleToggleStar(file);
                       }}
-                      className="text-slate-300 hover:text-amber-500 p-0.5 rounded transition-colors shrink-0"
+                      className={`p-0.5 rounded transition-all shrink-0 hover:text-amber-500 cursor-pointer ${
+                        file.is_starred
+                          ? 'text-amber-400 opacity-100'
+                          : 'text-slate-300 opacity-0 group-hover:opacity-100'
+                      }`}
                       title={file.is_starred ? 'Remove Star' : 'Star Document'}
                     >
                       <Star
