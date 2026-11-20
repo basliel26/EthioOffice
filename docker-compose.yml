@@ -62,11 +62,14 @@ services:
       JWT_ENABLED: "true"
       JWT_SECRET: ${EURO_OFFICE_JWT_SECRET:-euro-office-secret-change-in-production}
       JWT_HEADER: "Authorization"
+      JWT_IN_BODY: "true"
+      USE_UNAUTHORIZED_STORAGE: "true"
     ports:
       - "8080:80"
     volumes:
       - eurooffice_data:/var/www/onlyoffice/Data
       - eurooffice_log:/var/log/onlyoffice
+      - ./fonts:/usr/share/fonts/truetype/custom
 
 volumes:
   postgres_data:

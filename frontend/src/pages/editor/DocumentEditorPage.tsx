@@ -29,6 +29,8 @@ import {
   Heading2,
   RotateCcw,
   ShieldAlert,
+  Monitor,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -42,6 +44,21 @@ import type {
   FileVersionSummary,
 } from '../../api/types';
 
+// Global declaration for ONLYOFFICE / Euro-Office DocsAPI
+declare global {
+  interface Window {
+    DocsAPI?: {
+      DocEditor: new (
+        placeholderId: string,
+        config: unknown
+      ) => {
+        destroyEditor?: () => void;
+        [key: string]: unknown;
+      };
+    };
+  }
+}
+
 export const DocumentEditorPage: React.FC = () => {
   const { fileId } = useParams<{ fileId: string }>();
   const navigate = useNavigate();
@@ -51,10 +68,18 @@ export const DocumentEditorPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fileItem, setFileItem] = useState<FileItem | null>(null);
-  const [_docConfig, setDocConfig] = useState<EuroOfficeConfigResponse | null>(null);
+  const [docConfig, setDocConfig] = useState<EuroOfficeConfigResponse | null>(null);
   const [coAuthors, setCoAuthors] = useState<CoAuthorItem[]>([]);
 
-  // Content & Editing State
+  // Dual-Engine State ('euro-office' for ONLYOFFICE iframe, 'native' for built-in A4 canvas)
+  const [activeEngine, setActiveEngine] = useState<'euro-office' | 'native'>('native');
+  const [isDocumentServerOnline, setIsDocumentServerOnline] = useState(false);
+  const [docServerUrl, setDocServerUrl] = useState<string>('http://localhost:8080');
+  const [isEditorInitialized, setIsEditorInitialized] = useState(false);
+  const [editorLoadError, setEditorLoadError] = useState<string | null>(null);
+  const editorInstanceRef = useRef<{ destroyEditor?: () => void } | null>(null);
+
+  // Content & Editing State (Native Engine)
   const [content, setContent] = useState<string>('');
   const [originalContent, setOriginalContent] = useState<string>('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -62,7 +87,7 @@ export const DocumentEditorPage: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved' | 'error'>('saved');
   const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
 
-  // Formatting State
+  // Formatting State (Native Engine)
   const [selectedFont, setSelectedFont] = useState<string>('Inter');
   const [selectedFontSize, setSelectedFontSize] = useState<string>('14px');
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('left');
@@ -81,9 +106,6 @@ export const DocumentEditorPage: React.FC = () => {
 
   // Share Modal State
   const [showShareModal, setShowShareModal] = useState(false);
-
-  // Document Server Status
-  const [isDocumentServerOnline, setIsDocumentServerOnline] = useState(false);
 
   // Auto-save debounce timer ref
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -109,22 +131,27 @@ export const DocumentEditorPage: React.FC = () => {
     }
   };
 
-  // Load document data and configuration
+  // 1. Load document data and configuration
   const loadDocument = useCallback(async () => {
     if (!fileId) return;
     setIsLoading(true);
     setError(null);
 
     try {
-      // 1. Fetch file item metadata
+      // Fetch file item metadata
       const file = await filesApi.get(fileId);
       setFileItem(file);
 
-      // 2. Fetch Euro-Office config
-      const config = await euroOfficeApi.getConfig(fileId, 'en');
-      setDocConfig(config);
+      // Fetch Euro-Office config
+      let cfg: EuroOfficeConfigResponse | null = null;
+      try {
+        cfg = await euroOfficeApi.getConfig(fileId, 'en');
+        setDocConfig(cfg);
+      } catch (e) {
+        console.warn('Euro-Office config error', e);
+      }
 
-      // 3. Inspect lock status
+      // Check lock status
       if (file.is_locked && file.lock_info) {
         const isCurrentHolder = file.lock_info.locked_by_id === user?.id;
         setIsLockedByMe(isCurrentHolder);
@@ -136,19 +163,18 @@ export const DocumentEditorPage: React.FC = () => {
         setLockHolderName(null);
       }
 
-      // 4. Fetch real document text/content
+      // Fetch document text content for native canvas fallback
       try {
         const textData = await euroOfficeApi.getTextContent(fileId);
         setContent(textData.content || '');
         setOriginalContent(textData.content || '');
         setSaveStatus('saved');
       } catch {
-        // Fallback to title placeholder if unreadable binary
         setContent(`# ${file.name}\n\nStart typing your document content here...`);
         setOriginalContent(`# ${file.name}\n\nStart typing your document content here...`);
       }
 
-      // 5. Fetch co-authors
+      // Fetch co-authors
       try {
         const coauthorsRes = await euroOfficeApi.getCoauthors(fileId);
         setCoAuthors(coauthorsRes.coauthors);
@@ -156,15 +182,22 @@ export const DocumentEditorPage: React.FC = () => {
         setCoAuthors([]);
       }
 
-      // 6. Check Euro-Office Document Server connectivity
+      // Check Euro-Office Document Server connectivity probe
       try {
         const health = await euroOfficeApi.getHealth();
-        setIsDocumentServerOnline(health.status === 'UP');
+        const isUp = health.status === 'UP';
+        setIsDocumentServerOnline(isUp);
+        if (health.document_server_url) {
+          setDocServerUrl(health.document_server_url);
+        }
+        // If server is online, default to Euro-Office server engine; otherwise native canvas
+        setActiveEngine(isUp ? 'euro-office' : 'native');
       } catch {
         setIsDocumentServerOnline(false);
+        setActiveEngine('native');
       }
 
-      // 7. Pre-fetch versions for history drawer
+      // Pre-fetch versions for history drawer
       try {
         setIsLoadingVersions(true);
         const vers = await filesApi.listVersions(fileId);
@@ -186,10 +219,145 @@ export const DocumentEditorPage: React.FC = () => {
     loadDocument();
   }, [loadDocument]);
 
-  // Save handler (Supports both manual Save and debounced auto-save)
+  // 2. ONLYOFFICE / Euro-Office Dynamic Script Loader & Iframe Mount
+  useEffect(() => {
+    if (activeEngine !== 'euro-office' || !isDocumentServerOnline || !docConfig) {
+      return;
+    }
+
+    const scriptId = 'euro-office-api-script';
+    const scriptUrl = `${docServerUrl.replace(/\/$/, '')}/web-apps/apps/api/documents/api.js`;
+
+    const initEditor = () => {
+      if (!window.DocsAPI) {
+        setEditorLoadError('Euro-Office DocsAPI not found on Document Server');
+        return;
+      }
+
+      // Clean up previous instance if running
+      if (editorInstanceRef.current && typeof editorInstanceRef.current.destroyEditor === 'function') {
+        try {
+          editorInstanceRef.current.destroyEditor();
+        } catch {
+          // ignore cleanup error
+        }
+        editorInstanceRef.current = null;
+      }
+
+      try {
+        const container = document.getElementById('euro-office-iframe-container');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const editorConfigWithEvents = {
+          documentType: docConfig.documentType,
+          document: docConfig.document,
+          editorConfig: {
+            ...docConfig.editorConfig,
+            customization: {
+              ...docConfig.editorConfig.customization,
+              autosave: true,
+              forcesave: true,
+            },
+          },
+          token: docConfig.token,
+          width: '100%',
+          height: '100%',
+          type: 'desktop',
+          events: {
+            onAppReady: () => {
+              setIsEditorInitialized(true);
+              setSaveStatus('saved');
+            },
+            onDocumentReady: () => {
+              setIsEditorInitialized(true);
+              setSaveStatus('saved');
+            },
+            onDocumentStateChange: (event: { data: boolean }) => {
+              setHasUnsavedChanges(Boolean(event.data));
+              setSaveStatus(event.data ? 'unsaved' : 'saved');
+            },
+            onError: (event: unknown) => {
+              console.error('Euro-Office Document Server error event:', event);
+              setEditorLoadError('Euro-Office Document Server returned an error.');
+            },
+          },
+        };
+
+        editorInstanceRef.current = new window.DocsAPI.DocEditor(
+          'euro-office-iframe-container',
+          editorConfigWithEvents
+        );
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to instantiate Euro-Office editor';
+        setEditorLoadError(msg);
+      }
+    };
+
+    if (window.DocsAPI) {
+      initEditor();
+      return;
+    }
+
+    const existingScript = document.getElementById(scriptId) as HTMLScriptElement | null;
+    if (existingScript) {
+      existingScript.onload = () => initEditor();
+      existingScript.onerror = () => {
+        setEditorLoadError(`Unable to reach Euro-Office server at ${scriptUrl}`);
+        setIsDocumentServerOnline(false);
+        setActiveEngine('native');
+      };
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = scriptUrl;
+    script.async = true;
+    script.onload = () => initEditor();
+    script.onerror = () => {
+      setEditorLoadError(`Failed to load DocsAPI script from ${scriptUrl}`);
+      setIsDocumentServerOnline(false);
+      setActiveEngine('native');
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      if (editorInstanceRef.current && typeof editorInstanceRef.current.destroyEditor === 'function') {
+        try {
+          editorInstanceRef.current.destroyEditor();
+        } catch {
+          // ignore
+        }
+        editorInstanceRef.current = null;
+      }
+    };
+  }, [activeEngine, isDocumentServerOnline, docConfig, docServerUrl]);
+
+  // 3. Save handler for Native Canvas (Manual Save & debounced AutoSave)
   const handleSave = useCallback(
     async (isAutoSave: boolean = false, customContent?: string) => {
       if (!fileId || isSaving) return;
+
+      // If in Euro-Office server mode, trigger forcesave command
+      if (activeEngine === 'euro-office') {
+        setIsSaving(true);
+        setSaveStatus('saving');
+        try {
+          await euroOfficeApi.dispatchCommand(fileId, 'forcesave');
+          setSaveStatus('saved');
+          setLastSavedTime(new Date());
+          setHasUnsavedChanges(false);
+        } catch (err) {
+          console.warn('Euro-Office forcesave command response:', err);
+          setSaveStatus('saved');
+        } finally {
+          setIsSaving(false);
+        }
+        return;
+      }
+
+      // Native Canvas saving
       const contentToSave = customContent !== undefined ? customContent : content;
       if (contentToSave === originalContent && !hasUnsavedChanges) return;
 
@@ -205,12 +373,11 @@ export const DocumentEditorPage: React.FC = () => {
         setSaveStatus('saved');
         setLastSavedTime(new Date());
 
-        // Refresh version list in background
         try {
           const freshVersions = await filesApi.listVersions(fileId);
           setVersions(freshVersions);
         } catch {
-          // ignore background update error
+          // ignore
         }
       } catch (err: unknown) {
         setSaveStatus('error');
@@ -222,10 +389,10 @@ export const DocumentEditorPage: React.FC = () => {
         setIsSaving(false);
       }
     },
-    [fileId, isSaving, content, originalContent, hasUnsavedChanges]
+    [fileId, isSaving, activeEngine, content, originalContent, hasUnsavedChanges]
   );
 
-  // Content change handler with debounced auto-save (3 seconds idle)
+  // Content change handler for Native Canvas with debounced auto-save
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (isLockedByOther) return;
     const newContent = e.target.value;
@@ -233,7 +400,6 @@ export const DocumentEditorPage: React.FC = () => {
     setHasUnsavedChanges(newContent !== originalContent);
     setSaveStatus('unsaved');
 
-    // Reset auto-save debounce timer
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
     }
@@ -306,16 +472,20 @@ export const DocumentEditorPage: React.FC = () => {
     setIsReverting(true);
     try {
       await filesApi.revertVersion(fileId, versionNumber);
-      // Reload document content
       const textData = await euroOfficeApi.getTextContent(fileId);
       setContent(textData.content || '');
       setOriginalContent(textData.content || '');
       setHasUnsavedChanges(false);
       setSaveStatus('saved');
-      // Refresh versions
       const freshVersions = await filesApi.listVersions(fileId);
       setVersions(freshVersions);
       setShowHistoryDrawer(false);
+
+      // If in Euro-Office mode, reload document config
+      if (activeEngine === 'euro-office') {
+        const freshConfig = await euroOfficeApi.getConfig(fileId, 'en');
+        setDocConfig(freshConfig);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Revert failed';
       alert(`Rollback failed: ${msg}`);
@@ -324,7 +494,26 @@ export const DocumentEditorPage: React.FC = () => {
     }
   };
 
-  // Formatting Helpers for Textarea insertion
+  // Retry probe for Euro-Office server
+  const handleProbeServer = async () => {
+    try {
+      const health = await euroOfficeApi.getHealth();
+      const isUp = health.status === 'UP';
+      setIsDocumentServerOnline(isUp);
+      if (isUp) {
+        if (health.document_server_url) setDocServerUrl(health.document_server_url);
+        setActiveEngine('euro-office');
+        setEditorLoadError(null);
+      } else {
+        alert('Euro-Office Document Server is still unreachable on port 8080.');
+      }
+    } catch {
+      setIsDocumentServerOnline(false);
+      alert('Euro-Office Document Server check failed.');
+    }
+  };
+
+  // Formatting Helpers for Native Canvas Textarea
   const applyFormatting = (prefix: string, suffix: string = prefix, placeholder: string = 'text') => {
     const textarea = textareaRef.current;
     if (!textarea || isLockedByOther) return;
@@ -411,7 +600,7 @@ export const DocumentEditorPage: React.FC = () => {
               {renderDocIcon(fileItem.name, 'w-4 h-4')}
             </div>
             <span
-              className="text-xs sm:text-sm font-bold text-slate-800 truncate max-w-[150px] sm:max-w-xs md:max-w-md"
+              className="text-xs sm:text-sm font-bold text-slate-800 truncate max-w-[130px] sm:max-w-xs md:max-w-sm"
               title={fileItem.name}
             >
               {fileItem.name}
@@ -430,16 +619,66 @@ export const DocumentEditorPage: React.FC = () => {
                 <span>Editing Mode</span>
               </span>
             )}
-
-            <span className="hidden lg:inline-flex items-center gap-1.5 text-[10px] text-slate-500 font-medium px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200/80">
-              <span className={`w-1.5 h-1.5 rounded-full ${isDocumentServerOnline ? 'bg-emerald-500' : 'bg-blue-500'}`} />
-              <span>{isDocumentServerOnline ? 'Euro-Office Server Online' : 'Native CAS Engine'}</span>
-            </span>
           </div>
         </div>
 
-        {/* Center: Live Save Status & Lock Check-out Button */}
+        {/* Center: Dual-Engine Switcher + Save Status & Lock Check-out Button */}
         <div className="hidden md:flex items-center gap-3 text-xs">
+          {/* Engine Selector */}
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200/80">
+            <button
+              type="button"
+              onClick={() => setActiveEngine('euro-office')}
+              disabled={!isDocumentServerOnline}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                activeEngine === 'euro-office'
+                  ? 'bg-white text-blue-600 shadow-2xs'
+                  : !isDocumentServerOnline
+                  ? 'text-slate-400 cursor-not-allowed opacity-60'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title={
+                isDocumentServerOnline
+                  ? 'Full Euro-Office ONLYOFFICE Suite'
+                  : 'Euro-Office Document Server is offline on port 8080'
+              }
+            >
+              <Monitor className="w-3 h-3" />
+              <span>Euro-Office</span>
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isDocumentServerOnline ? 'bg-emerald-500' : 'bg-slate-300'
+                }`}
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveEngine('native')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                activeEngine === 'native'
+                  ? 'bg-white text-blue-600 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Native Sovereign Canvas Editor"
+            >
+              <Sparkles className="w-3 h-3" />
+              <span>Native Canvas</span>
+            </button>
+          </div>
+
+          {!isDocumentServerOnline && (
+            <button
+              type="button"
+              onClick={handleProbeServer}
+              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+              title="Check if Euro-Office Server is now online"
+            >
+              <RefreshCw className="w-3 h-3" />
+            </button>
+          )}
+
+          <div className="h-3 w-px bg-slate-200" />
+
           {/* Save Status Indicator */}
           <div className="flex items-center gap-1.5">
             {saveStatus === 'saving' ? (
@@ -582,201 +821,233 @@ export const DocumentEditorPage: React.FC = () => {
         </div>
       )}
 
-      {/* 3. Formatting Toolbar for Built-In Document Workspace */}
-      <div className="bg-white border-b border-slate-200/80 px-3 sm:px-6 py-1.5 flex items-center gap-1 sm:gap-2 overflow-x-auto text-xs shrink-0 select-none">
-        {/* Font Family Dropdown */}
-        <select
-          value={selectedFont}
-          onChange={(e) => setSelectedFont(e.target.value)}
-          className="text-xs px-2 py-1 rounded-md border border-slate-200 bg-white font-medium text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          title="Select Font Family"
-        >
-          <option value="Inter">Inter (System Default)</option>
-          <option value="'Abyssinica SIL', serif">Abyssinica SIL (Ge'ez / Amharic)</option>
-          <option value="'Nyala', sans-serif">Nyala (Ethiopic Standard)</option>
-          <option value="Calibri, sans-serif">Calibri</option>
-          <option value="Georgia, serif">Georgia</option>
-          <option value="'Courier New', monospace">Courier New (Monospace)</option>
-        </select>
+      {/* 3. Formatting Toolbar (Rendered ONLY in Native Canvas Mode) */}
+      {activeEngine === 'native' && (
+        <div className="bg-white border-b border-slate-200/80 px-3 sm:px-6 py-1.5 flex items-center gap-1 sm:gap-2 overflow-x-auto text-xs shrink-0 select-none">
+          {/* Font Family Dropdown with Ethiopian Ge'ez Fonts */}
+          <select
+            value={selectedFont}
+            onChange={(e) => setSelectedFont(e.target.value)}
+            className="text-xs px-2 py-1 rounded-md border border-slate-200 bg-white font-medium text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            title="Select Font Family"
+          >
+            <option value="Inter">Inter (System Default)</option>
+            <option value="'Abyssinica SIL', serif">Abyssinica SIL (Ge'ez / Amharic)</option>
+            <option value="'Nyala', sans-serif">Nyala (Ethiopic Standard)</option>
+            <option value="Calibri, sans-serif">Calibri</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="'Courier New', monospace">Courier New (Monospace)</option>
+          </select>
 
-        {/* Font Size Dropdown */}
-        <select
-          value={selectedFontSize}
-          onChange={(e) => setSelectedFontSize(e.target.value)}
-          className="text-xs px-2 py-1 rounded-md border border-slate-200 bg-white font-medium text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          title="Font Size"
-        >
-          <option value="12px">12 pt</option>
-          <option value="14px">14 pt</option>
-          <option value="16px">16 pt</option>
-          <option value="18px">18 pt</option>
-          <option value="20px">20 pt</option>
-          <option value="24px">24 pt</option>
-        </select>
+          {/* Font Size Dropdown */}
+          <select
+            value={selectedFontSize}
+            onChange={(e) => setSelectedFontSize(e.target.value)}
+            className="text-xs px-2 py-1 rounded-md border border-slate-200 bg-white font-medium text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            title="Font Size"
+          >
+            <option value="12px">12 pt</option>
+            <option value="14px">14 pt</option>
+            <option value="16px">16 pt</option>
+            <option value="18px">18 pt</option>
+            <option value="20px">20 pt</option>
+            <option value="24px">24 pt</option>
+          </select>
 
-        <div className="h-4 w-px bg-slate-200 mx-1 shrink-0" />
+          <div className="h-4 w-px bg-slate-200 mx-1 shrink-0" />
 
-        {/* Inline Formatting Buttons */}
-        <button
-          type="button"
-          onClick={() => applyFormatting('**', '**', 'bold text')}
-          disabled={isLockedByOther}
-          className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
-          title="Bold (**text**)"
-        >
-          <Bold className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => applyFormatting('*', '*', 'italic text')}
-          disabled={isLockedByOther}
-          className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
-          title="Italic (*text*)"
-        >
-          <Italic className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => applyFormatting('<u>', '</u>', 'underlined text')}
-          disabled={isLockedByOther}
-          className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
-          title="Underline"
-        >
-          <Underline className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => applyFormatting('~~', '~~', 'strikethrough text')}
-          disabled={isLockedByOther}
-          className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
-          title="Strikethrough"
-        >
-          <Strikethrough className="w-3.5 h-3.5" />
-        </button>
+          {/* Inline Formatting Buttons */}
+          <button
+            type="button"
+            onClick={() => applyFormatting('**', '**', 'bold text')}
+            disabled={isLockedByOther}
+            className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
+            title="Bold (**text**)"
+          >
+            <Bold className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => applyFormatting('*', '*', 'italic text')}
+            disabled={isLockedByOther}
+            className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
+            title="Italic (*text*)"
+          >
+            <Italic className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => applyFormatting('<u>', '</u>', 'underlined text')}
+            disabled={isLockedByOther}
+            className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
+            title="Underline"
+          >
+            <Underline className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => applyFormatting('~~', '~~', 'strikethrough text')}
+            disabled={isLockedByOther}
+            className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
+            title="Strikethrough"
+          >
+            <Strikethrough className="w-3.5 h-3.5" />
+          </button>
 
-        <div className="h-4 w-px bg-slate-200 mx-1 shrink-0" />
+          <div className="h-4 w-px bg-slate-200 mx-1 shrink-0" />
 
-        {/* Headings */}
-        <button
-          type="button"
-          onClick={() => applyLinePrefix('# ')}
-          disabled={isLockedByOther}
-          className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
-          title="Heading 1"
-        >
-          <Heading1 className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => applyLinePrefix('## ')}
-          disabled={isLockedByOther}
-          className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
-          title="Heading 2"
-        >
-          <Heading2 className="w-3.5 h-3.5" />
-        </button>
+          {/* Headings */}
+          <button
+            type="button"
+            onClick={() => applyLinePrefix('# ')}
+            disabled={isLockedByOther}
+            className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
+            title="Heading 1"
+          >
+            <Heading1 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => applyLinePrefix('## ')}
+            disabled={isLockedByOther}
+            className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
+            title="Heading 2"
+          >
+            <Heading2 className="w-3.5 h-3.5" />
+          </button>
 
-        <div className="h-4 w-px bg-slate-200 mx-1 shrink-0" />
+          <div className="h-4 w-px bg-slate-200 mx-1 shrink-0" />
 
-        {/* Lists */}
-        <button
-          type="button"
-          onClick={() => applyLinePrefix('- ')}
-          disabled={isLockedByOther}
-          className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
-          title="Bullet List"
-        >
-          <ListIcon className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => applyLinePrefix('1. ')}
-          disabled={isLockedByOther}
-          className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
-          title="Numbered List"
-        >
-          <ListOrdered className="w-3.5 h-3.5" />
-        </button>
+          {/* Lists */}
+          <button
+            type="button"
+            onClick={() => applyLinePrefix('- ')}
+            disabled={isLockedByOther}
+            className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
+            title="Bullet List"
+          >
+            <ListIcon className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => applyLinePrefix('1. ')}
+            disabled={isLockedByOther}
+            className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-40 cursor-pointer"
+            title="Numbered List"
+          >
+            <ListOrdered className="w-3.5 h-3.5" />
+          </button>
 
-        <div className="h-4 w-px bg-slate-200 mx-1 shrink-0" />
+          <div className="h-4 w-px bg-slate-200 mx-1 shrink-0" />
 
-        {/* Alignments */}
-        <button
-          type="button"
-          onClick={() => setTextAlign('left')}
-          className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-            textAlign === 'left' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-600 hover:bg-slate-100'
-          }`}
-          title="Align Left"
-        >
-          <AlignLeft className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setTextAlign('center')}
-          className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-            textAlign === 'center' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-600 hover:bg-slate-100'
-          }`}
-          title="Align Center"
-        >
-          <AlignCenter className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setTextAlign('right')}
-          className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-            textAlign === 'right' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-600 hover:bg-slate-100'
-          }`}
-          title="Align Right"
-        >
-          <AlignRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
+          {/* Alignments */}
+          <button
+            type="button"
+            onClick={() => setTextAlign('left')}
+            className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+              textAlign === 'left' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+            title="Align Left"
+          >
+            <AlignLeft className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setTextAlign('center')}
+            className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+              textAlign === 'center' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+            title="Align Center"
+          >
+            <AlignCenter className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setTextAlign('right')}
+            className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+              textAlign === 'right' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+            title="Align Right"
+          >
+            <AlignRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
-      {/* 4. Main Document Workspace Canvas & Revision History Drawer */}
+      {/* 4. Main Document Workspace (Dual Engine Display) */}
       <div className="flex-1 relative flex min-h-0 overflow-hidden">
-        {/* Document Sheet Canvas */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center items-start">
-          <div className="w-full max-w-4xl bg-white shadow-md border border-slate-200/80 rounded-2xl p-8 sm:p-14 min-h-[950px] flex flex-col justify-between transition-all">
-            <div className="space-y-4">
-              {/* Top Watermark bar */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 text-xs text-slate-400">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                  <span className="font-semibold text-slate-700">Euro-Office Native Workspace</span>
+        {/* ENGINE 1: Euro-Office / ONLYOFFICE Iframe Canvas */}
+        {activeEngine === 'euro-office' && isDocumentServerOnline && (
+          <div className="flex-1 w-full h-full relative overflow-hidden bg-slate-100">
+            {!isEditorInitialized && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-10 gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                <p className="text-xs font-semibold text-slate-700">Connecting to Euro-Office Suite Engine...</p>
+                <p className="text-[11px] text-slate-400">Loading OpenXML collaborative workspace</p>
+              </div>
+            )}
+            {editorLoadError && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-xl text-xs text-amber-900 shadow-md z-20 flex items-center gap-3">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>{editorLoadError}</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveEngine('native')}
+                  className="px-2.5 py-1 rounded-md bg-amber-200 hover:bg-amber-300 text-amber-900 font-semibold cursor-pointer"
+                >
+                  Switch to Native Canvas
+                </button>
+              </div>
+            )}
+            {/* The ONLYOFFICE container element */}
+            <div id="euro-office-iframe-container" className="w-full h-full" />
+          </div>
+        )}
+
+        {/* ENGINE 2: Native Canvas Sheet */}
+        {activeEngine === 'native' && (
+          <main className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center items-start">
+            <div className="w-full max-w-4xl bg-white shadow-md border border-slate-200/80 rounded-2xl p-8 sm:p-14 min-h-[950px] flex flex-col justify-between transition-all">
+              <div className="space-y-4">
+                {/* Top Watermark bar */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100 text-xs text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                    <span className="font-semibold text-slate-700">Euro-Office Native Workspace</span>
+                  </div>
+                  <div className="font-mono text-[11px] text-slate-400">
+                    CAS Version: v{versions[0]?.version_number || 1}
+                  </div>
                 </div>
-                <div className="font-mono text-[11px] text-slate-400">
-                  CAS Version: v{versions[0]?.version_number || 1}
-                </div>
+
+                {/* Editable Document Body */}
+                <textarea
+                  ref={textareaRef}
+                  value={content}
+                  onChange={handleContentChange}
+                  readOnly={isLockedByOther}
+                  placeholder="Start typing your document text here..."
+                  style={{
+                    fontFamily: selectedFont,
+                    fontSize: selectedFontSize,
+                    textAlign: textAlign,
+                  }}
+                  className={`w-full min-h-[750px] border-none outline-none resize-none leading-relaxed text-slate-800 placeholder-slate-300 ${
+                    isLockedByOther ? 'bg-slate-50/50 cursor-not-allowed' : 'bg-transparent'
+                  }`}
+                />
               </div>
 
-              {/* Editable Document Body */}
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={handleContentChange}
-                readOnly={isLockedByOther}
-                placeholder="Start typing your document text here..."
-                style={{
-                  fontFamily: selectedFont,
-                  fontSize: selectedFontSize,
-                  textAlign: textAlign,
-                }}
-                className={`w-full min-h-[750px] border-none outline-none resize-none leading-relaxed text-slate-800 placeholder-slate-300 ${
-                  isLockedByOther ? 'bg-slate-50/50 cursor-not-allowed' : 'bg-transparent'
-                }`}
-              />
+              {/* Document Bottom Footer */}
+              <div className="pt-6 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+                <span>{fileItem.name}</span>
+                <span>
+                  {content.length} characters • {content.trim().split(/\s+/).filter(Boolean).length} words
+                </span>
+              </div>
             </div>
-
-            {/* Document Bottom Footer */}
-            <div className="pt-6 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-              <span>{fileItem.name}</span>
-              <span>
-                {content.length} characters • {content.trim().split(/\s+/).filter(Boolean).length} words
-              </span>
-            </div>
-          </div>
-        </main>
+          </main>
+        )}
 
         {/* 5. In-Editor Revision History Slide-Out Drawer */}
         {showHistoryDrawer && (

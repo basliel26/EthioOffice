@@ -1,0 +1,31 @@
+version: '3.8'
+
+# Standalone Euro-Office / ONLYOFFICE Document Server Container
+# Use this when running EthioOffice backend & frontend locally, and you want
+# to spin up ONLY the Euro-Office Document Server on port 8080:
+#
+#   docker compose -f docker-compose.euro-office.yml up -d
+#
+services:
+  eurooffice:
+    image: onlyoffice/documentserver:latest
+    container_name: ethiooffice_eurooffice_standalone
+    restart: unless-stopped
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${EURO_OFFICE_JWT_SECRET:-euro-office-secret-change-in-production}
+      JWT_HEADER: "Authorization"
+      JWT_IN_BODY: "true"
+      USE_UNAUTHORIZED_STORAGE: "true"
+    ports:
+      - "8080:80"
+    volumes:
+      - eurooffice_standalone_data:/var/www/onlyoffice/Data
+      - eurooffice_standalone_log:/var/log/onlyoffice
+      - ./fonts:/usr/share/fonts/truetype/custom
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  eurooffice_standalone_data:
+  eurooffice_standalone_log:
