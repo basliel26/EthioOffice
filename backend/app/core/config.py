@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     # Euro-Office / ONLYOFFICE Integration
     EURO_OFFICE_URL: str = "http://localhost:8080"
     EURO_OFFICE_JWT_SECRET: str = "euro-office-secret-change-in-production"
-    BACKEND_INTERNAL_URL: str = "http://localhost:8000"
+    BACKEND_INTERNAL_URL: str = "http://host.docker.internal:8000"
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -476,24 +476,8 @@ class VersionService:
         if not target_version:
             raise VersionNotFoundError(f"የትርጉም ቁጥር {target_version_number} አልተገኘም")
 
-        max_v = db.query(func.coalesce(func.max(FileVersion.version_number), 0)).filter(
-            FileVersion.file_id == file_item.id
-        ).scalar()
-        next_v = max_v + 1
-
-        new_version = FileVersion(
-            file_id=file_item.id,
-            version_number=next_v,
-            storage_path=target_version.storage_path,
-            checksum_sha256=target_version.checksum_sha256,
-            size_bytes=target_version.size_bytes,
-            created_by_id=actor.id,
-            change_summary=f"Reverted to Version {target_version_number}",
-        )
-        db.add(new_version)
-        db.flush()
-
-        file_item.current_version_id = new_version.id
+        # Directly restore target version as the current active version (no duplicate version row created)
+        file_item.current_version_id = target_version.id
         file_item.size_bytes = target_version.size_bytes
         file_item.updated_at = datetime.now(timezone.utc)
 
@@ -507,7 +491,6 @@ class VersionService:
             details={
                 "action": "VERSION_REVERT",
                 "reverted_to": target_version_number,
-                "new_version": next_v,
             }
         )
         db.add(audit)
