@@ -252,14 +252,7 @@ export const DocumentEditorPage: React.FC = () => {
         const editorConfigWithEvents = {
           documentType: docConfig.documentType,
           document: docConfig.document,
-          editorConfig: {
-            ...docConfig.editorConfig,
-            customization: {
-              ...docConfig.editorConfig.customization,
-              autosave: true,
-              forcesave: true,
-            },
-          },
+          editorConfig: docConfig.editorConfig,
           token: docConfig.token,
           width: '100%',
           height: '100%',
@@ -977,36 +970,33 @@ export const DocumentEditorPage: React.FC = () => {
       {/* 4. Main Document Workspace (Dual Engine Display) */}
       <div className="flex-1 relative flex min-h-0 overflow-hidden">
         {/* ENGINE 1: Euro-Office / ONLYOFFICE Iframe Canvas */}
-        {activeEngine === 'euro-office' && isDocumentServerOnline && (
-          <div className="flex-1 w-full h-full relative overflow-hidden bg-slate-100">
-            {!isEditorInitialized && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-10 gap-3">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-                <p className="text-xs font-semibold text-slate-700">Connecting to Euro-Office Suite Engine...</p>
-                <p className="text-[11px] text-slate-400">Loading OpenXML collaborative workspace</p>
-              </div>
-            )}
-            {editorLoadError && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-xl text-xs text-amber-900 shadow-md z-20 flex items-center gap-3">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>{editorLoadError}</span>
-                <button
-                  type="button"
-                  onClick={() => setActiveEngine('native')}
-                  className="px-2.5 py-1 rounded-md bg-amber-200 hover:bg-amber-300 text-amber-900 font-semibold cursor-pointer"
-                >
-                  Switch to Native Canvas
-                </button>
-              </div>
-            )}
-            {/* The ONLYOFFICE container element */}
-            <div id="euro-office-iframe-container" className="w-full h-full" />
-          </div>
-        )}
+        <div className={`flex-1 w-full h-full relative overflow-hidden bg-slate-100 ${activeEngine === 'euro-office' && isDocumentServerOnline ? 'block' : 'hidden'}`}>
+          {!isEditorInitialized && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-10 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <p className="text-xs font-semibold text-slate-700">Connecting to Euro-Office Suite Engine...</p>
+              <p className="text-[11px] text-slate-400">Loading OpenXML collaborative workspace</p>
+            </div>
+          )}
+          {editorLoadError && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-xl text-xs text-amber-900 shadow-md z-20 flex items-center gap-3">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>{editorLoadError}</span>
+              <button
+                type="button"
+                onClick={() => setActiveEngine('native')}
+                className="px-2.5 py-1 rounded-md bg-amber-200 hover:bg-amber-300 text-amber-900 font-semibold cursor-pointer"
+              >
+                Switch to Native Canvas
+              </button>
+            </div>
+          )}
+          {/* The ONLYOFFICE container element (kept permanently mounted to prevent reload cycles) */}
+          <div id="euro-office-iframe-container" className="w-full h-full" />
+        </div>
 
         {/* ENGINE 2: Native Canvas Clean Paper Sheet */}
-        {activeEngine === 'native' && (
-          <main className="flex-1 overflow-y-auto p-4 sm:p-8 flex flex-col justify-start items-center">
+        <main className={`flex-1 overflow-y-auto p-4 sm:p-8 flex-col justify-start items-center ${activeEngine === 'native' ? 'flex' : 'hidden'}`}>
             {/* Authentic A4 Clean White Paper */}
             <div className="w-full max-w-[850px] bg-white shadow-[0_4px_25px_-5px_rgba(0,0,0,0.08)] border border-slate-200/90 rounded-sm px-10 sm:px-18 py-12 sm:py-20 min-h-[1100px] flex flex-col transition-all">
               {/* Clean Editable Document Canvas */}
@@ -1039,7 +1029,6 @@ export const DocumentEditorPage: React.FC = () => {
               </div>
             </div>
           </main>
-        )}
 
         {/* 5. In-Editor Revision History Slide-Out Drawer */}
         {showHistoryDrawer && (

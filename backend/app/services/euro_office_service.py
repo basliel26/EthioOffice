@@ -252,7 +252,6 @@ class EuroOfficeService:
                 forcesave=True,
                 chat=True,
                 comments=True,
-                customer={"name": "EthioOffice", "logo": "https://ethiooffice.et/logo.png"},
                 defaultFont="Abyssinica SIL",
                 font={"name": "Abyssinica SIL", "size": 12},
                 uiTheme="theme-classic-light",
