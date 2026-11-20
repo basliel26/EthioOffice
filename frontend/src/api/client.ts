@@ -441,10 +441,11 @@ export const euroOfficeApi = {
     const res = await api.get<{ content: string; format: string }>(`/euro-office/${fileId}/text-content`);
     return res.data;
   },
-  saveText: async (fileId: string, content: string, changeSummary?: string): Promise<FileItem> => {
+  saveText: async (fileId: string, content: string, changeSummary?: string, isAutoSave?: boolean): Promise<FileItem> => {
     const res = await api.post<FileItem>(`/euro-office/${fileId}/save-text`, {
       content,
       change_summary: changeSummary,
+      is_auto_save: Boolean(isAutoSave),
     });
     return res.data;
   },

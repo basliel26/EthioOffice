@@ -256,6 +256,7 @@ def get_document_session_history(
 class SaveTextRequest(BaseModel):
     content: str
     change_summary: Optional[str] = "Updated via Web Editor"
+    is_auto_save: Optional[bool] = False
 
 
 @router.get("/{file_id}/text-content")
@@ -306,10 +307,16 @@ def save_document_text(
 ):
     """
     Saves document text directly from the built-in Euro-Office web editor.
-    Formats .docx files into OpenXML binary and creates a new CAS revision (vN+1).
+    Formats .docx files into OpenXML binary.
+    Implements Smart Version Coalescing to prevent Version Storms:
+    - Auto-saves within a 15-minute window update the working draft in-place.
+    - Manual saves (Ctrl+S / Save button) create formal milestone revisions (vN+1).
     """
     import io
+    from datetime import datetime, timezone
     from app.services.version_service import VersionService
+    from app.services.storage_service import validate_file_security
+
     file_item = StorageService.get_item(db, current_user.organization_id, file_id, current_user)
     if file_item.is_folder:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Folders cannot be edited")
@@ -350,6 +357,33 @@ def save_document_text(
         stream = io.BytesIO(raw_bytes)
         content_type = "text/plain"
 
+    clean_filename = validate_file_security(file_item.name)
+    cur_v = file_item.current_version
+    now = datetime.now(timezone.utc)
+
+    # Smart Version Coalescing:
+    # If auto-save AND current version is from same user AND within 15-minute session window:
+    # update draft in place to prevent database version explosion
+    if payload.is_auto_save and cur_v and cur_v.created_by_id == current_user.id:
+        age_seconds = (now - cur_v.created_at).total_seconds()
+        if age_seconds < 900:  # 15 minutes window
+            rel_path, sha_hash, size_bytes = storage_provider.save_stream(
+                stream, current_user.organization_id, clean_filename
+            )
+            # If payload unchanged, return early
+            if cur_v.checksum_sha256 == sha_hash:
+                return StorageService.to_file_response(db, file_item, current_user)
+
+            cur_v.storage_path = rel_path
+            cur_v.checksum_sha256 = sha_hash
+            cur_v.size_bytes = size_bytes
+            file_item.size_bytes = size_bytes
+            file_item.updated_at = now
+            db.commit()
+            db.refresh(file_item)
+            return StorageService.to_file_response(db, file_item, current_user)
+
+    # Otherwise (manual save OR new session milestone): upload new version (vN+1)
     updated = VersionService.upload_new_version(
         db=db,
         org_id=current_user.organization_id,
@@ -357,7 +391,7 @@ def save_document_text(
         stream=stream,
         filename=file_item.name,
         actor=current_user,
-        change_summary=payload.change_summary or "Updated via Web Editor",
+        change_summary=payload.change_summary or ("Auto-saved revision" if payload.is_auto_save else "Manual milestone save"),
         content_type=content_type,
     )
     return StorageService.to_file_response(db, updated, current_user)

@@ -170,8 +170,8 @@ export const DocumentEditorPage: React.FC = () => {
         setOriginalContent(textData.content || '');
         setSaveStatus('saved');
       } catch {
-        setContent(`# ${file.name}\n\nStart typing your document content here...`);
-        setOriginalContent(`# ${file.name}\n\nStart typing your document content here...`);
+        setContent('');
+        setOriginalContent('');
       }
 
       // Fetch co-authors
@@ -366,7 +366,7 @@ export const DocumentEditorPage: React.FC = () => {
 
       try {
         const summary = isAutoSave ? 'Auto-saved revision' : 'Manual revision save';
-        const updated = await euroOfficeApi.saveText(fileId, contentToSave, summary);
+        const updated = await euroOfficeApi.saveText(fileId, contentToSave, summary, isAutoSave);
         setFileItem(updated);
         setOriginalContent(contentToSave);
         setHasUnsavedChanges(false);
@@ -1004,46 +1004,38 @@ export const DocumentEditorPage: React.FC = () => {
           </div>
         )}
 
-        {/* ENGINE 2: Native Canvas Sheet */}
+        {/* ENGINE 2: Native Canvas Clean Paper Sheet */}
         {activeEngine === 'native' && (
-          <main className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center items-start">
-            <div className="w-full max-w-4xl bg-white shadow-md border border-slate-200/80 rounded-2xl p-8 sm:p-14 min-h-[950px] flex flex-col justify-between transition-all">
-              <div className="space-y-4">
-                {/* Top Watermark bar */}
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100 text-xs text-slate-400">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                    <span className="font-semibold text-slate-700">Euro-Office Native Workspace</span>
-                  </div>
-                  <div className="font-mono text-[11px] text-slate-400">
-                    CAS Version: v{versions[0]?.version_number || 1}
-                  </div>
-                </div>
+          <main className="flex-1 overflow-y-auto p-4 sm:p-8 flex flex-col justify-start items-center">
+            {/* Authentic A4 Clean White Paper */}
+            <div className="w-full max-w-[850px] bg-white shadow-[0_4px_25px_-5px_rgba(0,0,0,0.08)] border border-slate-200/90 rounded-sm px-10 sm:px-18 py-12 sm:py-20 min-h-[1100px] flex flex-col transition-all">
+              {/* Clean Editable Document Canvas */}
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={handleContentChange}
+                readOnly={isLockedByOther}
+                placeholder=""
+                style={{
+                  fontFamily: selectedFont,
+                  fontSize: selectedFontSize,
+                  textAlign: textAlign,
+                }}
+                className={`w-full flex-1 min-h-[950px] border-none outline-none resize-none leading-relaxed text-slate-800 placeholder-slate-300 ${
+                  isLockedByOther ? 'bg-slate-50/50 cursor-not-allowed' : 'bg-transparent'
+                }`}
+              />
+            </div>
 
-                {/* Editable Document Body */}
-                <textarea
-                  ref={textareaRef}
-                  value={content}
-                  onChange={handleContentChange}
-                  readOnly={isLockedByOther}
-                  placeholder="Start typing your document text here..."
-                  style={{
-                    fontFamily: selectedFont,
-                    fontSize: selectedFontSize,
-                    textAlign: textAlign,
-                  }}
-                  className={`w-full min-h-[750px] border-none outline-none resize-none leading-relaxed text-slate-800 placeholder-slate-300 ${
-                    isLockedByOther ? 'bg-slate-50/50 cursor-not-allowed' : 'bg-transparent'
-                  }`}
-                />
+            {/* Non-intrusive Document Status Footer (Outside the paper) */}
+            <div className="w-full max-w-[850px] py-3 px-2 flex items-center justify-between text-[11px] text-slate-400">
+              <div className="flex items-center gap-3">
+                <span className="font-medium text-slate-500">{fileItem.name}</span>
+                <span>•</span>
+                <span>CAS Version: v{versions[0]?.version_number || 1}</span>
               </div>
-
-              {/* Document Bottom Footer */}
-              <div className="pt-6 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-                <span>{fileItem.name}</span>
-                <span>
-                  {content.length} characters • {content.trim().split(/\s+/).filter(Boolean).length} words
-                </span>
+              <div>
+                {content.length} characters • {content.trim().split(/\s+/).filter(Boolean).length} words
               </div>
             </div>
           </main>
