@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Standalone Euro-Office / ONLYOFFICE Document Server Container
 # Use this when running EthioOffice backend & frontend locally, and you want
 # to spin up ONLY the Euro-Office Document Server on port 8080:
