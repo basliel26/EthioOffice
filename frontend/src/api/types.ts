@@ -104,6 +104,17 @@ export interface FileItem {
   ec_created_at?: string;
 }
 
+export interface FileVersionSummary {
+  id: string;
+  version_number: number;
+  size_bytes: number;
+  checksum_sha256: string;
+  change_summary?: string;
+  created_by_name?: string;
+  created_at: string;
+  ec_created_at?: string;
+}
+
 export interface RecentFileItem {
   file: FileItem;
   last_action: string;

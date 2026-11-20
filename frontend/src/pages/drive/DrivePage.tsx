@@ -26,6 +26,7 @@ import {
   LayoutGrid,
   Filter,
   X,
+  Info,
 } from 'lucide-react';
 import { filesApi, tagsApi, sharesApi } from '../../api/client';
 import { useSearchScope } from '../../context/SearchContext';
@@ -34,6 +35,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { ShareModal } from '../../components/drive/ShareModal';
+import { FileDetailsPanel } from '../../components/drive/FileDetailsPanel';
 
 interface DrivePageProps {
   viewMode?: 'PERSONAL' | 'COMPANY' | 'SHARED' | 'STARRED' | 'RECENT' | 'TRASH';
@@ -92,6 +94,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     setCurrentFolderId(null);
     setBreadcrumbs([{ id: null, name: getRootBreadcrumbName(viewMode) }]);
     setSelectedTagFilter(null);
+    setSelectedItem(null);
     setShowNewDocMenu(false);
     setCanvasContextMenu(null);
     setRowContextMenu(null);
@@ -103,6 +106,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     const handleNavRoot = () => {
       setFiles([]);
       setCurrentFolderId(null);
+      setSelectedItem(null);
       setBreadcrumbs([{ id: null, name: getRootBreadcrumbName(viewMode) }]);
       setSelectedTagFilter(null);
     };
@@ -159,6 +163,31 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   const handleToggleLayout = (layout: 'list' | 'grid') => {
     setDisplayLayout(layout);
     localStorage.setItem('ethiooffice_drive_layout', layout);
+  };
+
+  // Details Inspector State & Selected Item
+  const [selectedItem, setSelectedItem] = useState<FileItem | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('ethiooffice_details_panel_open') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleDetails = () => {
+    setIsDetailsOpen((prev) => {
+      const next = !prev;
+      localStorage.setItem('ethiooffice_details_panel_open', next ? 'true' : 'false');
+      return next;
+    });
+  };
+
+  const handleItemUpdated = (updatedItem: FileItem) => {
+    setFiles((prev) => prev.map((f) => (f.id === updatedItem.id ? updatedItem : f)));
+    setSelectedItem(updatedItem);
+    const cacheKey = currentFolderId ? `${viewMode}_folder_${currentFolderId}` : `${viewMode}_root`;
+    driveMemoryCache.delete(cacheKey);
   };
 
   const newDocMenuRef = useRef<HTMLDivElement>(null);
@@ -477,6 +506,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   };
 
   const handleOpenFolder = (folder: FileItem) => {
+    setSelectedItem(null);
     const key = `${viewMode}_${folder.id}`;
     const cached = driveMemoryCache.get(key);
     if (cached) {
@@ -491,6 +521,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   };
 
   const handleNavigateBreadcrumb = (index: number) => {
+    setSelectedItem(null);
     const target = breadcrumbs[index];
     const key = `${viewMode}_${target.id || 'root'}`;
     const cached = driveMemoryCache.get(key);
@@ -640,6 +671,20 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         >
           <ExternalLink className="w-4 h-4 text-slate-500 shrink-0" />
           <span>{file.is_folder ? 'Open Folder' : 'Open in Editor'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveRowMenuId(null);
+            setSelectedItem(file);
+            setIsDetailsOpen(true);
+            localStorage.setItem('ethiooffice_details_panel_open', 'true');
+          }}
+          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+        >
+          <Info className="w-4 h-4 text-slate-500 shrink-0" />
+          <span>Details & Versions</span>
         </button>
 
         {!file.is_folder && (
@@ -1018,14 +1063,34 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
               <LayoutGrid className="w-4 h-4" />
             </button>
           </div>
+
+          {/* Details Inspector Toggle */}
+          <button
+            type="button"
+            onClick={handleToggleDetails}
+            title={isDetailsOpen ? 'Hide Details Inspector' : 'Show Details Inspector'}
+            className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+              isDetailsOpen
+                ? 'bg-blue-50 border-blue-300 text-blue-600 shadow-2xs'
+                : 'bg-white border-slate-200/80 text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+            }`}
+          >
+            <Info className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      {/* Files & Folders Content List */}
-      <div
-        onContextMenu={openCanvasContextMenu}
-        className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-2 sm:p-3 min-h-[300px]"
-      >
+      {/* Main Files Area with Collapsible Right-Side Details Inspector Panel */}
+      <div className="flex flex-col lg:flex-row gap-4 items-start">
+        <div
+          onContextMenu={openCanvasContextMenu}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedItem(null);
+            }
+          }}
+          className="flex-1 w-full min-w-0 bg-white rounded-2xl shadow-xs border border-slate-200/80 p-2 sm:p-3 min-h-[420px]"
+        >
         {isLoading ? (
           <div className="py-20 text-center text-xs font-medium text-slate-400">Loading files...</div>
         ) : filteredFiles.length === 0 ? (
@@ -1040,19 +1105,29 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         ) : displayLayout === 'grid' ? (
           /* Grid View */
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3">
-            {filteredFiles.map((file) => (
-              <div
-                key={file.id}
-                onContextMenu={(e) => openRowContextMenu(e, file)}
-                onDoubleClick={() => {
-                  if (file.is_folder) {
-                    handleOpenFolder(file);
-                  } else {
-                    navigate(`/editor/${file.id}`);
-                  }
-                }}
-                className="group relative flex flex-col justify-between p-3.5 rounded-2xl bg-white border border-slate-200/80 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer select-none"
-              >
+            {filteredFiles.map((file) => {
+              const isSelected = selectedItem?.id === file.id;
+              return (
+                <div
+                  key={file.id}
+                  onClick={() => setSelectedItem(file)}
+                  onContextMenu={(e) => {
+                    setSelectedItem(file);
+                    openRowContextMenu(e, file);
+                  }}
+                  onDoubleClick={() => {
+                    if (file.is_folder) {
+                      handleOpenFolder(file);
+                    } else {
+                      navigate(`/editor/${file.id}`);
+                    }
+                  }}
+                  className={`group relative flex flex-col justify-between p-3.5 rounded-2xl border transition-all cursor-pointer select-none ${
+                    isSelected
+                      ? 'bg-blue-50/40 border-blue-500 ring-2 ring-blue-500/20 shadow-sm'
+                      : 'bg-white border-slate-200/80 hover:border-blue-400 hover:shadow-md'
+                  }`}
+                >
                 {/* Top: Icon + Star & Three-dots */}
                 <div className="flex items-start justify-between gap-1.5">
                   <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100/90 group-hover:bg-blue-50/70 transition-colors">
@@ -1145,24 +1220,35 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                   </span>
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
+        </div>
         ) : (
           /* List View */
           <div className="space-y-1 sm:space-y-1.5">
-            {filteredFiles.map((file) => (
-              <div
-                key={file.id}
-                onContextMenu={(e) => openRowContextMenu(e, file)}
-                onDoubleClick={() => {
-                  if (file.is_folder) {
-                    handleOpenFolder(file);
-                  } else {
-                    navigate(`/editor/${file.id}`);
-                  }
-                }}
-                className="flex items-center justify-between p-3 sm:px-4 rounded-xl border border-transparent hover:border-slate-200/70 hover:bg-slate-50/80 transition-all group cursor-pointer"
-              >
+            {filteredFiles.map((file) => {
+              const isSelected = selectedItem?.id === file.id;
+              return (
+                <div
+                  key={file.id}
+                  onClick={() => setSelectedItem(file)}
+                  onContextMenu={(e) => {
+                    setSelectedItem(file);
+                    openRowContextMenu(e, file);
+                  }}
+                  onDoubleClick={() => {
+                    if (file.is_folder) {
+                      handleOpenFolder(file);
+                    } else {
+                      navigate(`/editor/${file.id}`);
+                    }
+                  }}
+                  className={`flex items-center justify-between p-3 sm:px-4 rounded-xl border transition-all group cursor-pointer ${
+                    isSelected
+                      ? 'bg-blue-50/50 border-blue-500 ring-1 ring-blue-500/30'
+                      : 'border-transparent hover:border-slate-200/70 hover:bg-slate-50/80'
+                  }`}
+                >
                 {/* Left: Star + Icon + Name + Tags */}
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   {viewMode !== 'TRASH' && (
@@ -1294,10 +1380,38 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+
+      {isDetailsOpen && (
+        <FileDetailsPanel
+          item={selectedItem}
+          currentFolder={breadcrumbs[breadcrumbs.length - 1]}
+          driveType={viewMode === 'COMPANY' ? 'COMPANY' : 'PERSONAL'}
+          isOpen={isDetailsOpen}
+          onClose={() => {
+            setIsDetailsOpen(false);
+            localStorage.setItem('ethiooffice_details_panel_open', 'false');
+          }}
+          onItemUpdated={handleItemUpdated}
+          onNavigateFolder={handleOpenFolder}
+          onOpenEditor={(f) => navigate(`/editor/${f.id}`)}
+          onManageTags={(f) => {
+            setTargetFile(f);
+            setSelectedTagIds(
+              availableTags
+                .filter((t) => f.tags?.includes(t.name))
+                .map((t) => t.id)
+            );
+            setShowTagModal(true);
+          }}
+          onToggleStar={handleToggleStar}
+        />
+      )}
+    </div>
 
       {/* 1. New Folder Modal */}
       <Modal
@@ -1631,6 +1745,21 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
               >
                 <ExternalLink className="w-4 h-4 text-slate-500 shrink-0" />
                 <span>{rowContextMenu.file.is_folder ? 'Open Folder' : 'Open in Editor'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const f = rowContextMenu.file;
+                  setRowContextMenu(null);
+                  setSelectedItem(f);
+                  setIsDetailsOpen(true);
+                  localStorage.setItem('ethiooffice_details_panel_open', 'true');
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+              >
+                <Info className="w-4 h-4 text-slate-500 shrink-0" />
+                <span>Details & Versions</span>
               </button>
 
               {!rowContextMenu.file.is_folder && (

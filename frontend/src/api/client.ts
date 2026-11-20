@@ -4,6 +4,7 @@ import type {
   UserProfile, 
   CalendarTodayResponse, 
   FileItem, 
+  FileVersionSummary,
   RecentFileItem,
   EmptyTrashResponse,
   TagItem,
@@ -216,6 +217,47 @@ export const filesApi = {
   },
   releaseLock: async (fileId: string, force: boolean = false): Promise<unknown> => {
     const res = await api.post(`/files/${fileId}/unlock`, { force });
+    return res.data;
+  },
+  downloadFile: async (fileId: string, filename: string): Promise<void> => {
+    const res = await api.get(`/files/${fileId}/download`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([res.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+  listVersions: async (fileId: string): Promise<FileVersionSummary[]> => {
+    const res = await api.get<FileVersionSummary[]>(`/files/${fileId}/versions`);
+    return res.data;
+  },
+  downloadVersion: async (fileId: string, versionNumber: number, filename: string): Promise<void> => {
+    const res = await api.get(`/files/${fileId}/versions/${versionNumber}/download`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([res.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+  revertVersion: async (fileId: string, versionNumber: number): Promise<FileItem> => {
+    const res = await api.post<FileItem>(`/files/${fileId}/versions/${versionNumber}/revert`);
+    return res.data;
+  },
+  uploadNewVersion: async (fileId: string, file: File, changeSummary?: string): Promise<FileItem> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (changeSummary) {
+      formData.append('change_summary', changeSummary);
+    }
+    const res = await api.post<FileItem>(`/files/${fileId}/versions`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return res.data;
   },
 };
