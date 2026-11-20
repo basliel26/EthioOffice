@@ -535,7 +535,23 @@ class EuroOfficeService:
 
     @classmethod
     def check_health(cls) -> EuroOfficeHealthResponse:
-        """Performs connectivity & readiness probe on the Euro-Office / ONLYOFFICE Document Server."""
+        """Performs connectivity & readiness probe on the Euro-Office Server."""
+        # 1. Check Euro-Office (Collabora/CODE on port 9980)
+        try:
+            with httpx.Client(timeout=httpx.Timeout(0.8)) as client:
+                resp = client.get("http://localhost:9980/hosting/discovery")
+                if resp.status_code == 200:
+                    return EuroOfficeHealthResponse(
+                        status="UP",
+                        document_server_url="http://localhost:9980",
+                        jwt_enabled=True,
+                        supported_formats=["word", "cell", "slide"],
+                        default_ethiopian_font="Abyssinica SIL",
+                    )
+        except Exception:
+            pass
+
+        # 2. Check fallback port 8080
         doc_server_url = settings.EURO_OFFICE_URL
         probe_url = f"{doc_server_url.rstrip('/')}/healthcheck"
         status_result = "DOWN"
