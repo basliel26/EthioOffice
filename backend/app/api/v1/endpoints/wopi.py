@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 import io
 import urllib.parse
@@ -8,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request, R
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
+import httpx
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -21,6 +23,33 @@ from app.services.version_service import VersionService
 router = APIRouter()
 
 WOPI_JWT_SECRET = settings.SECRET_KEY
+
+# Cache the Collabora discovery cool.html action URL
+_cached_cool_base_url: Optional[str] = None
+
+
+def get_collabora_cool_base_url() -> str:
+    """
+    Queries Collabora Online discovery to dynamically obtain the active versioned cool.html URL.
+    Falls back to /browser/dist/cool.html? if discovery is unreachable.
+    """
+    global _cached_cool_base_url
+    if _cached_cool_base_url:
+        return _cached_cool_base_url
+
+    doc_server = settings.EURO_OFFICE_URL.rstrip("/")
+    try:
+        with httpx.Client(timeout=1.5) as client:
+            resp = client.get(f"{doc_server}/hosting/discovery")
+            if resp.status_code == 200 and 'urlsrc="' in resp.text:
+                match = re.search(r'urlsrc="(http://[^"]+?/cool\.html\?)', resp.text)
+                if match:
+                    _cached_cool_base_url = match.group(1)
+                    return _cached_cool_base_url
+    except Exception:
+        pass
+
+    return f"{doc_server}/browser/dist/cool.html?"
 
 
 def create_wopi_token(file_id: uuid.UUID, user_id: uuid.UUID, org_id: uuid.UUID, can_write: bool = True) -> str:
@@ -47,6 +76,15 @@ def verify_wopi_token(token: str, file_id: uuid.UUID) -> Dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired WOPI access token")
 
 
+def extract_token(access_token: Optional[str], authorization: Optional[str]) -> str:
+    """Extracts access token from either query parameter or Bearer header."""
+    if access_token:
+        return access_token.strip()
+    if authorization and authorization.startswith("Bearer "):
+        return authorization[7:].strip()
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing WOPI access token")
+
+
 @router.get("/{file_id}/url")
 def get_wopi_embed_url(
     file_id: uuid.UUID,
@@ -54,14 +92,11 @@ def get_wopi_embed_url(
     access_token: Optional[str] = Query(None),
 ):
     """
-    Returns the Collabora / Euro-Office WOPI iframe embedding URL.
+    Returns the Collabora / EuroOffice WOPI iframe embedding URL.
     """
-    from app.api.deps import get_current_user
-    # If no token passed, requires standard session user
     token_str = access_token
-    token_data = None
     if token_str:
-        token_data = verify_wopi_token(token_str, file_id)
+        verify_wopi_token(token_str, file_id)
 
     file_item = db.query(FileItem).filter(FileItem.id == file_id, FileItem.is_deleted == False).first()
     if not file_item or file_item.is_folder:
@@ -70,8 +105,12 @@ def get_wopi_embed_url(
     if not token_str:
         token_str = create_wopi_token(file_id, file_item.owner_id, file_item.organization_id, True)
 
-    wopi_src = f"http://host.docker.internal:8000/api/v1/wopi/files/{file_id}"
-    cool_url = f"http://localhost:9980/browser/dist/cool.html?WOPISrc={urllib.parse.quote(wopi_src, safe='')}&access_token={token_str}"
+    internal_host = settings.BACKEND_INTERNAL_URL.rstrip("/")
+    wopi_src = f"{internal_host}/api/v1/wopi/files/{file_id}"
+
+    base_cool_url = get_collabora_cool_base_url()
+    separator = "&" if ("?" in base_cool_url and not base_cool_url.endswith("?")) else ("" if base_cool_url.endswith("?") else "?")
+    cool_url = f"{base_cool_url}{separator}WOPISrc={urllib.parse.quote(wopi_src, safe='')}&access_token={token_str}"
 
     return {
         "file_id": str(file_id),
@@ -84,14 +123,16 @@ def get_wopi_embed_url(
 @router.get("/files/{file_id}")
 def check_file_info(
     file_id: uuid.UUID,
-    access_token: str = Query(..., description="WOPI access token"),
+    access_token: Optional[str] = Query(None, description="WOPI access token"),
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
     """
     WOPI CheckFileInfo endpoint:
-    Returns file metadata, user capabilities, and permissions for Collabora / Euro-Office.
+    Returns file metadata, user capabilities, and permissions for Collabora / EuroOffice.
     """
-    token_data = verify_wopi_token(access_token, file_id)
+    token = extract_token(access_token, authorization)
+    token_data = verify_wopi_token(token, file_id)
     user_id = uuid.UUID(token_data["sub"])
     org_id = uuid.UUID(token_data["org_id"])
 
@@ -123,18 +164,24 @@ def check_file_info(
 
     cur_v = file_item.current_version
     v_sha = cur_v.checksum_sha256 if cur_v else "initial"
-    last_modified = file_item.updated_at.isoformat() if file_item.updated_at else datetime.now(timezone.utc).isoformat()
+
+    dt = file_item.updated_at or datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    last_modified = dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
     return {
         "BaseFileName": file_item.name,
         "OwnerId": str(file_item.owner_id),
-        "Size": file_item.size_bytes,
+        "Size": file_item.size_bytes or 0,
         "UserId": str(user.id),
         "UserFriendlyName": user.full_name,
         "UserCanWrite": can_write,
+        "UserCanReview": True,
         "UserCanNotWriteRelative": True,
         "SupportsUpdate": True,
         "SupportsLocks": True,
+        "SupportsGetLock": True,
         "PostMessageOrigin": "*",
         "HidePrintOption": False,
         "HideSaveOption": False,
@@ -148,14 +195,16 @@ def check_file_info(
 @router.get("/files/{file_id}/contents")
 def get_file_content(
     file_id: uuid.UUID,
-    access_token: str = Query(..., description="WOPI access token"),
+    access_token: Optional[str] = Query(None, description="WOPI access token"),
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
     """
     WOPI GetFile endpoint:
-    Streams raw document binary from CAS storage to Collabora / Euro-Office.
+    Streams raw document binary from CAS storage to Collabora / EuroOffice.
     """
-    token_data = verify_wopi_token(access_token, file_id)
+    token = extract_token(access_token, authorization)
+    token_data = verify_wopi_token(token, file_id)
     org_id = uuid.UUID(token_data["org_id"])
 
     file_item = db.query(FileItem).filter(
@@ -167,12 +216,17 @@ def get_file_content(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     cur_v = file_item.current_version
-    if not cur_v:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+    full_path = storage_provider.get_full_path(cur_v.storage_path) if cur_v else None
 
-    full_path = storage_provider.get_full_path(cur_v.storage_path)
-    if not os.path.exists(full_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Physical payload missing")
+    # Handle blank documents without stored bytes
+    if not full_path or not os.path.exists(full_path):
+        return Response(
+            content=b"",
+            media_type=file_item.mime_type or "application/octet-stream",
+            headers={
+                "X-WOPI-ItemVersion": "0",
+            }
+        )
 
     encoded_name = urllib.parse.quote(file_item.name, encoding="utf-8")
     headers = {
@@ -192,14 +246,16 @@ def get_file_content(
 async def put_file_content(
     file_id: uuid.UUID,
     request: Request,
-    access_token: str = Query(..., description="WOPI access token"),
+    access_token: Optional[str] = Query(None, description="WOPI access token"),
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
     """
     WOPI PutFile endpoint:
-    Receives updated document bytes from Collabora / Euro-Office and commits a CAS revision.
+    Receives updated document bytes from Collabora / EuroOffice and commits a CAS revision.
     """
-    token_data = verify_wopi_token(access_token, file_id)
+    token = extract_token(access_token, authorization)
+    token_data = verify_wopi_token(token, file_id)
     user_id = uuid.UUID(token_data["sub"])
     org_id = uuid.UUID(token_data["org_id"])
 
@@ -222,7 +278,7 @@ async def put_file_content(
 
     stream = io.BytesIO(payload_bytes)
 
-    # Commit version
+    # Commit version into CAS storage
     updated_file = VersionService.upload_new_version(
         db=db,
         org_id=org_id,
@@ -230,7 +286,7 @@ async def put_file_content(
         stream=stream,
         filename=file_item.name,
         actor=user,
-        change_summary="Collabora / Euro-Office Collaborative Save",
+        change_summary="EuroOffice Collaborative Suite Save",
     )
 
     cur_v = updated_file.current_version
@@ -246,15 +302,17 @@ async def handle_wopi_operations(
     file_id: uuid.UUID,
     x_wopi_override: Optional[str] = Header(None, alias="X-WOPI-Override"),
     x_wopi_lock: Optional[str] = Header(None, alias="X-WOPI-Lock"),
-    access_token: str = Query(..., description="WOPI access token"),
+    x_wopi_old_lock: Optional[str] = Header(None, alias="X-WOPI-OldLock"),
+    access_token: Optional[str] = Query(None, description="WOPI access token"),
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
     """
     Handles WOPI locking operations (LOCK, UNLOCK, REFRESH_LOCK, GET_LOCK).
     """
-    token_data = verify_wopi_token(access_token, file_id)
+    token = extract_token(access_token, authorization)
+    token_data = verify_wopi_token(token, file_id)
     user_id = uuid.UUID(token_data["sub"])
-    org_id = uuid.UUID(token_data["org_id"])
 
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     if not user:

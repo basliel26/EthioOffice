@@ -38,26 +38,10 @@ import { ShareModal } from '../../components/drive/ShareModal';
 import { euroOfficeApi, filesApi, wopiApi } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import type {
-  EuroOfficeConfigResponse,
   CoAuthorItem,
   FileItem,
   FileVersionSummary,
 } from '../../api/types';
-
-// Global declaration for ONLYOFFICE / Euro-Office DocsAPI
-declare global {
-  interface Window {
-    DocsAPI?: {
-      DocEditor: new (
-        placeholderId: string,
-        config: unknown
-      ) => {
-        destroyEditor?: () => void;
-        [key: string]: unknown;
-      };
-    };
-  }
-}
 
 export const DocumentEditorPage: React.FC = () => {
   const { fileId } = useParams<{ fileId: string }>();
@@ -68,17 +52,13 @@ export const DocumentEditorPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fileItem, setFileItem] = useState<FileItem | null>(null);
-  const [docConfig, setDocConfig] = useState<EuroOfficeConfigResponse | null>(null);
   const [coAuthors, setCoAuthors] = useState<CoAuthorItem[]>([]);
 
-  // Dual-Engine State ('euro-office' for ONLYOFFICE iframe, 'native' for built-in A4 canvas)
+  // Dual-Engine State ('euro-office' for Collabora WOPI iframe, 'native' for built-in A4 canvas)
   const [activeEngine, setActiveEngine] = useState<'euro-office' | 'native'>('native');
   const [isDocumentServerOnline, setIsDocumentServerOnline] = useState(false);
-  const [docServerUrl, setDocServerUrl] = useState<string>('http://localhost:8080');
   const [wopiUrl, setWopiUrl] = useState<string | null>(null);
   const [isEditorInitialized, setIsEditorInitialized] = useState(false);
-  const [editorLoadError, setEditorLoadError] = useState<string | null>(null);
-  const editorInstanceRef = useRef<{ destroyEditor?: () => void } | null>(null);
 
   // Content & Editing State (Native Engine)
   const [content, setContent] = useState<string>('');
@@ -143,15 +123,6 @@ export const DocumentEditorPage: React.FC = () => {
       const file = await filesApi.get(fileId);
       setFileItem(file);
 
-      // Fetch Euro-Office config
-      let cfg: EuroOfficeConfigResponse | null = null;
-      try {
-        cfg = await euroOfficeApi.getConfig(fileId, 'en');
-        setDocConfig(cfg);
-      } catch (e) {
-        console.warn('Euro-Office config error', e);
-      }
-
       // Fetch Collabora / Euro-Office WOPI URL
       try {
         const wopiData = await wopiApi.getEmbedUrl(fileId);
@@ -196,9 +167,6 @@ export const DocumentEditorPage: React.FC = () => {
         const health = await euroOfficeApi.getHealth();
         const isUp = health.status === 'UP';
         setIsDocumentServerOnline(isUp);
-        if (health.document_server_url) {
-          setDocServerUrl(health.document_server_url);
-        }
         // If server is online, default to Euro-Office server engine; otherwise native canvas
         setActiveEngine(isUp ? 'euro-office' : 'native');
       } catch {
@@ -228,124 +196,57 @@ export const DocumentEditorPage: React.FC = () => {
     loadDocument();
   }, [loadDocument]);
 
-  // 2. ONLYOFFICE / Euro-Office Dynamic Script Loader & Iframe Mount
+  // 2. Collabora Online / EuroOffice WOPI postMessage Event Listener
   useEffect(() => {
-    if (activeEngine !== 'euro-office' || !isDocumentServerOnline || !docConfig) {
-      return;
-    }
+    if (activeEngine !== 'euro-office') return;
 
-    const scriptId = 'euro-office-api-script';
-    const scriptUrl = `${docServerUrl.replace(/\/$/, '')}/web-apps/apps/api/documents/api.js`;
-
-    const initEditor = () => {
-      if (!window.DocsAPI) {
-        setEditorLoadError('Euro-Office DocsAPI not found on Document Server');
-        return;
-      }
-
-      // Clean up previous instance if running
-      if (editorInstanceRef.current && typeof editorInstanceRef.current.destroyEditor === 'function') {
-        try {
-          editorInstanceRef.current.destroyEditor();
-        } catch {
-          // ignore cleanup error
-        }
-        editorInstanceRef.current = null;
-      }
-
+    const handleMessage = (event: MessageEvent) => {
       try {
-        const container = document.getElementById('euro-office-iframe-container');
-        if (!container) return;
-        container.innerHTML = '';
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (!data || !data.MessageId) return;
 
-        const editorConfigWithEvents = {
-          documentType: docConfig.documentType,
-          document: docConfig.document,
-          editorConfig: docConfig.editorConfig,
-          token: docConfig.token,
-          width: '100%',
-          height: '100%',
-          type: 'desktop',
-          events: {
-            onAppReady: () => {
-              setIsEditorInitialized(true);
-              setSaveStatus('saved');
-            },
-            onDocumentReady: () => {
-              setIsEditorInitialized(true);
-              setSaveStatus('saved');
-            },
-            onDocumentStateChange: (event: { data: boolean }) => {
-              setHasUnsavedChanges(Boolean(event.data));
-              setSaveStatus(event.data ? 'unsaved' : 'saved');
-            },
-            onError: (event: unknown) => {
-              console.error('Euro-Office Document Server error event:', event);
-              setEditorLoadError('Euro-Office Document Server returned an error.');
-            },
-          },
-        };
-
-        editorInstanceRef.current = new window.DocsAPI.DocEditor(
-          'euro-office-iframe-container',
-          editorConfigWithEvents
-        );
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Failed to instantiate Euro-Office editor';
-        setEditorLoadError(msg);
-      }
-    };
-
-    if (window.DocsAPI) {
-      initEditor();
-      return;
-    }
-
-    const existingScript = document.getElementById(scriptId) as HTMLScriptElement | null;
-    if (existingScript) {
-      existingScript.onload = () => initEditor();
-      existingScript.onerror = () => {
-        setEditorLoadError(`Unable to reach Euro-Office server at ${scriptUrl}`);
-        setIsDocumentServerOnline(false);
-        setActiveEngine('native');
-      };
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.id = scriptId;
-    script.src = scriptUrl;
-    script.async = true;
-    script.onload = () => initEditor();
-    script.onerror = () => {
-      setEditorLoadError(`Failed to load DocsAPI script from ${scriptUrl}`);
-      setIsDocumentServerOnline(false);
-      setActiveEngine('native');
-    };
-    document.body.appendChild(script);
-
-    return () => {
-      if (editorInstanceRef.current && typeof editorInstanceRef.current.destroyEditor === 'function') {
-        try {
-          editorInstanceRef.current.destroyEditor();
-        } catch {
-          // ignore
+        if (data.MessageId === 'App_LoadingStatus') {
+          if (data.Values?.Status === 'Document_Loaded') {
+            setIsEditorInitialized(true);
+            setSaveStatus('saved');
+          }
+        } else if (data.MessageId === 'Doc_ModifiedStatus') {
+          const modified = Boolean(data.Values?.Modified);
+          setHasUnsavedChanges(modified);
+          setSaveStatus(modified ? 'unsaved' : 'saved');
+        } else if (data.MessageId === 'UI_Save' || data.MessageId === 'Action_Save_Resp') {
+          setSaveStatus('saved');
+          setHasUnsavedChanges(false);
+          setLastSavedTime(new Date());
+          if (fileId) {
+            filesApi.listVersions(fileId).then(setVersions).catch(() => {});
+          }
         }
-        editorInstanceRef.current = null;
+      } catch {
+        // Not a JSON message or non-Collabora event
       }
     };
-  }, [activeEngine, isDocumentServerOnline, docConfig, docServerUrl]);
 
-  // 3. Save handler for Native Canvas (Manual Save & debounced AutoSave)
+    window.addEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, [activeEngine, fileId]);
+
+  // 3. Save handler for EuroOffice Suite & Native Canvas
   const handleSave = useCallback(
     async (isAutoSave: boolean = false, customContent?: string) => {
       if (!fileId || isSaving) return;
 
-      // If in Euro-Office server mode, trigger forcesave command
+      // If in Euro-Office server mode, post Action_Save to Collabora iframe and trigger forcesave
       if (activeEngine === 'euro-office') {
         setIsSaving(true);
         setSaveStatus('saving');
         try {
+          const iframe = document.querySelector('iframe');
+          if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage(JSON.stringify({ MessageId: 'Action_Save', Values: {} }), '*');
+          }
           await euroOfficeApi.dispatchCommand(fileId, 'forcesave');
           setSaveStatus('saved');
           setLastSavedTime(new Date());
@@ -483,10 +384,10 @@ export const DocumentEditorPage: React.FC = () => {
       setVersions(freshVersions);
       setShowHistoryDrawer(false);
 
-      // If in Euro-Office mode, reload document config
+      // If in Euro-Office mode, reload WOPI iframe URL
       if (activeEngine === 'euro-office') {
-        const freshConfig = await euroOfficeApi.getConfig(fileId, 'en');
-        setDocConfig(freshConfig);
+        const wopiData = await wopiApi.getEmbedUrl(fileId);
+        setWopiUrl(wopiData.iframe_url);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Revert failed';
@@ -503,11 +404,13 @@ export const DocumentEditorPage: React.FC = () => {
       const isUp = health.status === 'UP';
       setIsDocumentServerOnline(isUp);
       if (isUp) {
-        if (health.document_server_url) setDocServerUrl(health.document_server_url);
         setActiveEngine('euro-office');
-        setEditorLoadError(null);
+        if (fileId) {
+          const wopiData = await wopiApi.getEmbedUrl(fileId);
+          setWopiUrl(wopiData.iframe_url);
+        }
       } else {
-        alert('Euro-Office Document Server is still unreachable on port 8080.');
+        alert('Euro-Office Document Server is still unreachable on port 9980.');
       }
     } catch {
       setIsDocumentServerOnline(false);
@@ -641,8 +544,8 @@ export const DocumentEditorPage: React.FC = () => {
               }`}
               title={
                 isDocumentServerOnline
-                  ? 'Full Euro-Office ONLYOFFICE Suite'
-                  : 'Euro-Office Document Server is offline on port 8080'
+                  ? 'Euro-Office Sovereign Suite (Port 9980)'
+                  : 'Euro-Office Document Server is offline on port 9980'
               }
             >
               <Monitor className="w-3 h-3" />
@@ -978,39 +881,23 @@ export const DocumentEditorPage: React.FC = () => {
 
       {/* 4. Main Document Workspace (Dual Engine Display) */}
       <div className="flex-1 relative flex min-h-0 overflow-hidden">
-        {/* ENGINE 1: Euro-Office (Collabora / Sovereign Suite) Iframe Canvas */}
+        {/* ENGINE 1: Euro-Office (Collabora Sovereign Suite) Iframe Canvas */}
         <div className={`flex-1 w-full h-full relative overflow-hidden bg-slate-100 ${activeEngine === 'euro-office' && isDocumentServerOnline ? 'block' : 'hidden'}`}>
-          {wopiUrl ? (
+          {!isEditorInitialized && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-10 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <p className="text-xs font-semibold text-slate-700">Connecting to Euro-Office Suite Engine...</p>
+              <p className="text-[11px] text-slate-400">Loading OpenXML collaborative workspace</p>
+            </div>
+          )}
+          {wopiUrl && (
             <iframe
               src={wopiUrl}
               className="w-full h-full border-none"
               title="Euro-Office Collaborative Suite"
               allow="autoplay; camera; microphone; display-capture"
+              onLoad={() => setIsEditorInitialized(true)}
             />
-          ) : (
-            <>
-              {!isEditorInitialized && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-10 gap-3">
-                  <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-                  <p className="text-xs font-semibold text-slate-700">Connecting to Euro-Office Suite Engine...</p>
-                  <p className="text-[11px] text-slate-400">Loading OpenXML collaborative workspace</p>
-                </div>
-              )}
-              {editorLoadError && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-xl text-xs text-amber-900 shadow-md z-20 flex items-center gap-3">
-                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>{editorLoadError}</span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveEngine('native')}
-                    className="px-2.5 py-1 rounded-md bg-amber-200 hover:bg-amber-300 text-amber-900 font-semibold cursor-pointer"
-                  >
-                    Switch to Native Canvas
-                  </button>
-                </div>
-              )}
-              <div id="euro-office-iframe-container" className="w-full h-full" />
-            </>
           )}
         </div>
 

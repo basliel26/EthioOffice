@@ -11,8 +11,8 @@ services:
     container_name: ethiooffice_eurooffice
     restart: unless-stopped
     environment:
-      - aliasgroup1=http://host.docker.internal:8000
-      - extra_params=--o:ssl.enable=false --o:ssl.termination=true --o:welcome.enable=false
+      - aliasgroup1=http://host.docker.internal:8000,http://127.0.0.1:8000,http://localhost:8000,http://localhost:5174,http://127.0.0.1:5174
+      - extra_params=--o:ssl.enable=false --o:ssl.termination=false --o:welcome.enable=false --o:net.content_security_policy="frame-ancestors *;" --o:net.post_allow.host[0]=.*
       - DONT_GEN_SSL_CERT=true
     ports:
       - "9980:9980"

@@ -21,8 +21,10 @@ class Settings(BaseSettings):
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
+        "http://localhost:5174",
         "http://localhost:3000",
         "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
         "http://127.0.0.1:3000",
     ]
     
@@ -44,8 +46,8 @@ class Settings(BaseSettings):
     STORAGE_ROOT: str = "./storage_data"
     MAX_UPLOAD_SIZE_MB: int = 500
     
-    # Euro-Office / ONLYOFFICE Integration
-    EURO_OFFICE_URL: str = "http://localhost:8080"
+    # Euro-Office / Collabora WOPI Integration
+    EURO_OFFICE_URL: str = "http://localhost:9980"
     EURO_OFFICE_JWT_SECRET: str = "euro-office-secret-change-in-production"
     BACKEND_INTERNAL_URL: str = "http://host.docker.internal:8000"
 
