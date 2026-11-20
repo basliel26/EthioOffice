@@ -1253,7 +1253,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                 <div className="flex items-center min-w-0 flex-1">
                   {viewMode !== 'TRASH' && (
                     <div
-                      className={`overflow-hidden transition-all duration-200 ease-out shrink-0 flex items-center justify-center ${
+                      className={`overflow-hidden transition-all duration-300 ease-out shrink-0 flex items-center justify-center ${
                         file.is_starred
                           ? 'w-6 opacity-100 mr-2.5'
                           : 'w-0 opacity-0 group-hover:w-6 group-hover:opacity-100 group-hover:mr-2.5'
@@ -1264,21 +1264,21 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                           e.stopPropagation();
                           handleToggleStar(file);
                         }}
-                        className={`p-0.5 rounded transition-colors hover:text-amber-500 cursor-pointer ${
+                        className={`p-0.5 rounded transition-colors duration-200 hover:text-amber-500 cursor-pointer ${
                           file.is_starred ? 'text-amber-400' : 'text-slate-300'
                         }`}
                         title={file.is_starred ? 'Remove Star' : 'Star Document'}
                       >
                         <Star
-                          className={`w-4 h-4 ${
-                            file.is_starred ? 'fill-amber-400 text-amber-400' : ''
+                          className={`w-4 h-4 transition-transform duration-300 ease-out ${
+                            file.is_starred ? 'fill-amber-400 text-amber-400' : 'group-hover:scale-105'
                           }`}
                         />
                       </button>
                     </div>
                   )}
 
-                  <div className="shrink-0 mr-3 transition-transform duration-200 ease-out group-hover:scale-105 group-hover:rotate-2">
+                  <div className="shrink-0 mr-3 transition-transform duration-300 ease-out group-hover:scale-105 group-hover:rotate-2">
                     {getFileIcon(file, 'w-5 h-5')}
                   </div>
 
