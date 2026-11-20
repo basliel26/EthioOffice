@@ -1250,29 +1250,35 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                   }`}
                 >
                 {/* Left: Star + Icon + Name + Tags */}
-                <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="flex items-center min-w-0 flex-1">
                   {viewMode !== 'TRASH' && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleStar(file);
-                      }}
-                      className={`p-0.5 rounded transition-all shrink-0 hover:text-amber-500 cursor-pointer ${
+                    <div
+                      className={`overflow-hidden transition-all duration-200 ease-out shrink-0 flex items-center justify-center ${
                         file.is_starred
-                          ? 'text-amber-400 opacity-100'
-                          : 'text-slate-300 opacity-0 group-hover:opacity-100'
+                          ? 'w-6 opacity-100 mr-2.5'
+                          : 'w-0 opacity-0 group-hover:w-6 group-hover:opacity-100 group-hover:mr-2.5'
                       }`}
-                      title={file.is_starred ? 'Remove Star' : 'Star Document'}
                     >
-                      <Star
-                        className={`w-4 h-4 ${
-                          file.is_starred ? 'fill-amber-400 text-amber-400' : ''
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleStar(file);
+                        }}
+                        className={`p-0.5 rounded transition-colors hover:text-amber-500 cursor-pointer ${
+                          file.is_starred ? 'text-amber-400' : 'text-slate-300'
                         }`}
-                      />
-                    </button>
+                        title={file.is_starred ? 'Remove Star' : 'Star Document'}
+                      >
+                        <Star
+                          className={`w-4 h-4 ${
+                            file.is_starred ? 'fill-amber-400 text-amber-400' : ''
+                          }`}
+                        />
+                      </button>
+                    </div>
                   )}
 
-                  <div className="shrink-0">
+                  <div className="shrink-0 mr-3 transition-transform duration-200 ease-out group-hover:scale-105 group-hover:rotate-2">
                     {getFileIcon(file, 'w-5 h-5')}
                   </div>
 
