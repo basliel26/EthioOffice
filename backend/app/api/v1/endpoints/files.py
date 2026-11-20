@@ -373,6 +373,24 @@ def empty_trash(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "LICENSE_LOCKDOWN_READ_ONLY", "message": str(e)})
 
 
+@router.get("/{file_id}", response_model=FileItemResponse)
+def get_file(
+    file_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get file or folder metadata by ID.
+    """
+    try:
+        item = StorageService.get_item(db, current_user.organization_id, file_id, current_user)
+        return StorageService.to_file_response(db, item, current_user)
+    except FileItemNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except DriveAccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
 @router.get("/{file_id}/download")
 def download_file(
     file_id: uuid.UUID,

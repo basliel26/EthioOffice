@@ -132,6 +132,10 @@ export const filesApi = {
     const res = await api.get<FileItem[]>(`/files?${params.toString()}`);
     return res.data;
   },
+  get: async (fileId: string): Promise<FileItem> => {
+    const res = await api.get<FileItem>(`/files/${fileId}`);
+    return res.data;
+  },
   upload: async (file: File, driveType: 'PERSONAL' | 'COMPANY' = 'PERSONAL', parentId?: string): Promise<FileItem> => {
     const formData = new FormData();
     formData.append('file', file);
@@ -430,6 +434,17 @@ export const euroOfficeApi = {
       file_id: fileId,
       command,
       userdata,
+    });
+    return res.data;
+  },
+  getTextContent: async (fileId: string): Promise<{ content: string; format: string }> => {
+    const res = await api.get<{ content: string; format: string }>(`/euro-office/${fileId}/text-content`);
+    return res.data;
+  },
+  saveText: async (fileId: string, content: string, changeSummary?: string): Promise<FileItem> => {
+    const res = await api.post<FileItem>(`/euro-office/${fileId}/save-text`, {
+      content,
+      change_summary: changeSummary,
     });
     return res.data;
   },

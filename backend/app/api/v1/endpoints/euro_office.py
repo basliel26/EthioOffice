@@ -2,6 +2,7 @@ import os
 import uuid
 import urllib.parse
 from typing import Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -250,3 +251,113 @@ def get_document_session_history(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except DriveAccessDeniedError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+class SaveTextRequest(BaseModel):
+    content: str
+    change_summary: Optional[str] = "Updated via Web Editor"
+
+
+@router.get("/{file_id}/text-content")
+def get_document_text_content(
+    file_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Extracts text content from .docx or .txt document for the in-browser editor.
+    """
+    file_item = StorageService.get_item(db, current_user.organization_id, file_id, current_user)
+    if file_item.is_folder:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Folders cannot be viewed as text")
+
+    version = file_item.current_version
+    if not version:
+        return {"content": "", "format": "text"}
+
+    full_path = storage_provider.get_full_path(version.storage_path)
+    if not os.path.exists(full_path):
+        return {"content": "", "format": "text"}
+
+    _, ext = os.path.splitext(file_item.name)
+    ext = ext.lower()
+
+    if ext == ".docx":
+        try:
+            import docx
+            doc = docx.Document(full_path)
+            paragraphs = [p.text for p in doc.paragraphs]
+            return {"content": "\n\n".join(paragraphs), "format": "docx"}
+        except Exception:
+            return {"content": "", "format": "docx"}
+    elif ext in [".txt", ".md", ".csv", ".json", ".log"]:
+        with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+            return {"content": f.read(), "format": "text"}
+    else:
+        return {"content": f"[Binary Document: {file_item.name}]", "format": ext.lstrip(".")}
+
+
+@router.post("/{file_id}/save-text")
+def save_document_text(
+    file_id: uuid.UUID,
+    payload: SaveTextRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Saves document text directly from the built-in Euro-Office web editor.
+    Formats .docx files into OpenXML binary and creates a new CAS revision (vN+1).
+    """
+    import io
+    from app.services.version_service import VersionService
+    file_item = StorageService.get_item(db, current_user.organization_id, file_id, current_user)
+    if file_item.is_folder:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Folders cannot be edited")
+
+    # Enforce write lock check
+    VersionService.verify_write_lock(db, file_item, current_user)
+
+    _, ext = os.path.splitext(file_item.name)
+    ext = ext.lower()
+
+    if ext == ".docx":
+        import docx
+        doc = docx.Document()
+        lines = payload.content.split("\n")
+        first_heading = True
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("# ") and first_heading:
+                doc.add_heading(stripped[2:], level=1)
+                first_heading = False
+            elif stripped.startswith("## "):
+                doc.add_heading(stripped[3:], level=2)
+            elif stripped.startswith("### "):
+                doc.add_heading(stripped[4:], level=3)
+            elif stripped.startswith("- ") or stripped.startswith("* "):
+                doc.add_paragraph(stripped[2:], style='List Bullet')
+            else:
+                doc.add_paragraph(stripped)
+        buf = io.BytesIO()
+        doc.save(buf)
+        buf.seek(0)
+        content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        stream = buf
+    else:
+        raw_bytes = payload.content.encode("utf-8")
+        stream = io.BytesIO(raw_bytes)
+        content_type = "text/plain"
+
+    updated = VersionService.upload_new_version(
+        db=db,
+        org_id=current_user.organization_id,
+        file_id=file_id,
+        stream=stream,
+        filename=file_item.name,
+        actor=current_user,
+        change_summary=payload.change_summary or "Updated via Web Editor",
+        content_type=content_type,
+    )
+    return StorageService.to_file_response(db, updated, current_user)
