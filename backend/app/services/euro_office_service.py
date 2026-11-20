@@ -254,7 +254,6 @@ class EuroOfficeService:
                 comments=True,
                 defaultFont="Abyssinica SIL",
                 font={"name": "Abyssinica SIL", "size": 12},
-                uiTheme="theme-classic-light",
             ),
         )
 
@@ -536,28 +535,12 @@ class EuroOfficeService:
     @classmethod
     def check_health(cls) -> EuroOfficeHealthResponse:
         """Performs connectivity & readiness probe on the Euro-Office Server."""
-        # 1. Check Euro-Office (Collabora/CODE on port 9980)
-        try:
-            with httpx.Client(timeout=httpx.Timeout(0.8)) as client:
-                resp = client.get("http://localhost:9980/hosting/discovery")
-                if resp.status_code == 200:
-                    return EuroOfficeHealthResponse(
-                        status="UP",
-                        document_server_url="http://localhost:9980",
-                        jwt_enabled=True,
-                        supported_formats=["word", "cell", "slide"],
-                        default_ethiopian_font="Abyssinica SIL",
-                    )
-        except Exception:
-            pass
-
-        # 2. Check fallback port 8080
-        doc_server_url = settings.EURO_OFFICE_URL
-        probe_url = f"{doc_server_url.rstrip('/')}/healthcheck"
+        doc_server_url = settings.EURO_OFFICE_URL.rstrip("/")
+        probe_url = f"{doc_server_url}/healthcheck"
         status_result = "DOWN"
 
         try:
-            with httpx.Client(timeout=httpx.Timeout(0.5)) as client:
+            with httpx.Client(timeout=httpx.Timeout(1.0)) as client:
                 resp = client.get(probe_url)
                 if resp.status_code == 200 and resp.text.strip().lower() == "true":
                     status_result = "UP"

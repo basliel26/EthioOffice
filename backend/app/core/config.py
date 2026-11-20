@@ -46,8 +46,8 @@ class Settings(BaseSettings):
     STORAGE_ROOT: str = "./storage_data"
     MAX_UPLOAD_SIZE_MB: int = 500
     
-    # Euro-Office / Collabora WOPI Integration
-    EURO_OFFICE_URL: str = "http://localhost:9980"
+    # Euro-Office / Document Server Integration (100% On-Premise & Offline)
+    EURO_OFFICE_URL: str = "http://localhost:8080"
     EURO_OFFICE_JWT_SECRET: str = "euro-office-secret-change-in-production"
     BACKEND_INTERNAL_URL: str = "http://host.docker.internal:8000"
 

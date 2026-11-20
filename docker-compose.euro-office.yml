@@ -1,20 +1,29 @@
-# Sovereign European EuroOffice / Collabora Online (CODE) Web Suite
-# 100% Free and Open Source (MPLv2)
-# Zero license keys, zero connection limits, zero paywall modals.
+# Euro-Office / Sovereign Document Server Container
+# 100% Offline / Air-Gapped / Intranet Ready - Zero internet connection required.
+# Pure Microsoft Office-identical ribbon toolbar (Word, Excel, PowerPoint).
 #
 # To run:
 #   docker compose -f docker-compose.euro-office.yml up -d
 #
 services:
   eurooffice:
-    image: collabora/code:latest
-    container_name: ethiooffice_eurooffice
+    image: onlyoffice/documentserver:latest
+    container_name: ethiooffice_eurooffice_standalone
     restart: unless-stopped
     environment:
-      - aliasgroup1=http://host.docker.internal:8000,http://127.0.0.1:8000,http://localhost:8000,http://localhost:5174,http://127.0.0.1:5174
-      - extra_params=--o:ssl.enable=false --o:ssl.termination=false --o:welcome.enable=false --o:net.content_security_policy="frame-ancestors *;" --o:net.post_allow.host[0]=.*
-      - DONT_GEN_SSL_CERT=true
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${EURO_OFFICE_JWT_SECRET:-euro-office-secret-change-in-production}
+      JWT_HEADER: "Authorization"
+      JWT_IN_BODY: "true"
+      USE_UNAUTHORIZED_STORAGE: "true"
     ports:
-      - "9980:9980"
+      - "8080:80"
+    volumes:
+      - eurooffice_standalone_data:/var/www/onlyoffice/Data
+      - eurooffice_standalone_log:/var/log/onlyoffice
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+volumes:
+  eurooffice_standalone_data:
+  eurooffice_standalone_log:

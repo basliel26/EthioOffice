@@ -30,10 +30,8 @@ class EditorCustomization(BaseModel):
     forcesave: bool = True
     chat: bool = True
     comments: bool = True
-    customer: Optional[Dict[str, str]] = None
     defaultFont: str = "Abyssinica SIL"
     font: Optional[Dict[str, Any]] = None
-    uiTheme: str = "theme-classic-light"
 
 
 class EditorConfig(BaseModel):
