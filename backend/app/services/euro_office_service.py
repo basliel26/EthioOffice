@@ -542,7 +542,7 @@ class EuroOfficeService:
         status_result = "DOWN"
 
         try:
-            with httpx.Client(timeout=2.0) as client:
+            with httpx.Client(timeout=httpx.Timeout(0.5)) as client:
                 resp = client.get(probe_url)
                 if resp.status_code == 200 and resp.text.strip().lower() == "true":
                     status_result = "UP"
