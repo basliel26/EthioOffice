@@ -16,6 +16,7 @@ from app.api.v1.endpoints import (
     tags,
     notifications,
     system,
+    wopi,
 )
 
 api_router = APIRouter()
@@ -48,3 +49,4 @@ api_router.include_router(audit.router, prefix="/audit", tags=["Module 11: Audit
 api_router.include_router(tags.router, prefix="/tags", tags=["Document Tags & Taxonomy Classification Engine"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["In-App Notifications & Event Alert Engine"])
 api_router.include_router(system.router, prefix="/system", tags=["System Deployment & Topology"])
+api_router.include_router(wopi.router, prefix="/wopi", tags=["WOPI: Euro-Office & Collabora Protocol"])

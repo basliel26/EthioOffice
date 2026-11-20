@@ -412,6 +412,13 @@ export const auditApi = {
 // -------------------------------------------------------------
 // 9. Euro-Office / ONLYOFFICE Collaborative Editor API
 // -------------------------------------------------------------
+export const wopiApi = {
+  getEmbedUrl: async (fileId: string): Promise<{ file_id: string; wopi_src: string; access_token: string; iframe_url: string }> => {
+    const res = await api.get<{ file_id: string; wopi_src: string; access_token: string; iframe_url: string }>(`/wopi/${fileId}/url`);
+    return res.data;
+  },
+};
+
 export const euroOfficeApi = {
   getHealth: async (): Promise<EuroOfficeHealthResponse> => {
     const res = await api.get<EuroOfficeHealthResponse>('/euro-office/health');

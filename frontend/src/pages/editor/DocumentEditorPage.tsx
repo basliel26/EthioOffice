@@ -35,7 +35,7 @@ import {
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { ShareModal } from '../../components/drive/ShareModal';
-import { euroOfficeApi, filesApi } from '../../api/client';
+import { euroOfficeApi, filesApi, wopiApi } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import type {
   EuroOfficeConfigResponse,
@@ -75,6 +75,7 @@ export const DocumentEditorPage: React.FC = () => {
   const [activeEngine, setActiveEngine] = useState<'euro-office' | 'native'>('native');
   const [isDocumentServerOnline, setIsDocumentServerOnline] = useState(false);
   const [docServerUrl, setDocServerUrl] = useState<string>('http://localhost:8080');
+  const [wopiUrl, setWopiUrl] = useState<string | null>(null);
   const [isEditorInitialized, setIsEditorInitialized] = useState(false);
   const [editorLoadError, setEditorLoadError] = useState<string | null>(null);
   const editorInstanceRef = useRef<{ destroyEditor?: () => void } | null>(null);
@@ -149,6 +150,14 @@ export const DocumentEditorPage: React.FC = () => {
         setDocConfig(cfg);
       } catch (e) {
         console.warn('Euro-Office config error', e);
+      }
+
+      // Fetch Collabora / Euro-Office WOPI URL
+      try {
+        const wopiData = await wopiApi.getEmbedUrl(fileId);
+        setWopiUrl(wopiData.iframe_url);
+      } catch (e) {
+        console.warn('WOPI URL error', e);
       }
 
       // Check lock status
@@ -969,30 +978,40 @@ export const DocumentEditorPage: React.FC = () => {
 
       {/* 4. Main Document Workspace (Dual Engine Display) */}
       <div className="flex-1 relative flex min-h-0 overflow-hidden">
-        {/* ENGINE 1: Euro-Office / ONLYOFFICE Iframe Canvas */}
+        {/* ENGINE 1: Euro-Office (Collabora / Sovereign Suite) Iframe Canvas */}
         <div className={`flex-1 w-full h-full relative overflow-hidden bg-slate-100 ${activeEngine === 'euro-office' && isDocumentServerOnline ? 'block' : 'hidden'}`}>
-          {!isEditorInitialized && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-10 gap-3">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-              <p className="text-xs font-semibold text-slate-700">Connecting to Euro-Office Suite Engine...</p>
-              <p className="text-[11px] text-slate-400">Loading OpenXML collaborative workspace</p>
-            </div>
+          {wopiUrl ? (
+            <iframe
+              src={wopiUrl}
+              className="w-full h-full border-none"
+              title="Euro-Office Collaborative Suite"
+              allow="autoplay; camera; microphone; display-capture"
+            />
+          ) : (
+            <>
+              {!isEditorInitialized && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-10 gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                  <p className="text-xs font-semibold text-slate-700">Connecting to Euro-Office Suite Engine...</p>
+                  <p className="text-[11px] text-slate-400">Loading OpenXML collaborative workspace</p>
+                </div>
+              )}
+              {editorLoadError && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-xl text-xs text-amber-900 shadow-md z-20 flex items-center gap-3">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>{editorLoadError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveEngine('native')}
+                    className="px-2.5 py-1 rounded-md bg-amber-200 hover:bg-amber-300 text-amber-900 font-semibold cursor-pointer"
+                  >
+                    Switch to Native Canvas
+                  </button>
+                </div>
+              )}
+              <div id="euro-office-iframe-container" className="w-full h-full" />
+            </>
           )}
-          {editorLoadError && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-xl text-xs text-amber-900 shadow-md z-20 flex items-center gap-3">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>{editorLoadError}</span>
-              <button
-                type="button"
-                onClick={() => setActiveEngine('native')}
-                className="px-2.5 py-1 rounded-md bg-amber-200 hover:bg-amber-300 text-amber-900 font-semibold cursor-pointer"
-              >
-                Switch to Native Canvas
-              </button>
-            </div>
-          )}
-          {/* The ONLYOFFICE container element (kept permanently mounted to prevent reload cycles) */}
-          <div id="euro-office-iframe-container" className="w-full h-full" />
         </div>
 
         {/* ENGINE 2: Native Canvas Clean Paper Sheet */}
