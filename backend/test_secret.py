@@ -30,15 +30,15 @@ with httpx.Client(trust_env=False, timeout=5.0) as client:
         try:
             r = client.post(target_url, json=body, headers=headers)
             res = r.text.strip()
-        if '"error":0' in res or '"error": 0' in res:
-            print(f"[SUCCESS] MATCH FOUND! Secret is: '{s}'")
-            print(f"          Response: {res}")
-            matched = s
-            break
-        else:
-            print(f"[-] Tried '{s}': {res}")
-    except Exception as e:
-        print(f"[!] Error testing '{s}': {e}")
+            if '"error":0' in res or '"error": 0' in res:
+                print(f"[SUCCESS] MATCH FOUND! Secret is: '{s}'")
+                print(f"          Response: {res}")
+                matched = s
+                break
+            else:
+                print(f"[-] Tried '{s}': {res}")
+        except Exception as e:
+            print(f"[!] Error testing '{s}': {e}")
 
 print("-" * 50)
 if matched:
