@@ -261,10 +261,12 @@ export const DocumentEditorPage: React.FC = () => {
           type: 'desktop',
           events: {
             onAppReady: () => {
+              console.log('[Euro-Office] onAppReady event fired');
               setIsEditorInitialized(true);
               setSaveStatus('saved');
             },
             onDocumentReady: () => {
+              console.log('[Euro-Office] onDocumentReady event fired');
               setIsEditorInitialized(true);
               setSaveStatus('saved');
             },
@@ -273,8 +275,11 @@ export const DocumentEditorPage: React.FC = () => {
               setSaveStatus(event.data ? 'unsaved' : 'saved');
             },
             onError: (event: unknown) => {
-              console.error('Euro-Office editor error:', event);
-              setEditorLoadError('Euro-Office Document Server error');
+              console.error('[Euro-Office] editor onError:', event);
+              setEditorLoadError('Euro-Office error: ' + JSON.stringify(event));
+            },
+            onWarning: (event: unknown) => {
+              console.warn('[Euro-Office] editor onWarning:', event);
             },
           },
         };
@@ -283,6 +288,11 @@ export const DocumentEditorPage: React.FC = () => {
           'euro-office-mount-point',
           editorConfigWithEvents
         );
+
+        // Auto-dismiss the loader once iframe attaches so ONLYOFFICE's native UI is visible
+        setTimeout(() => {
+          setIsEditorInitialized(true);
+        }, 1500);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Failed to instantiate Euro-Office editor';
         setEditorLoadError(msg);
@@ -1002,10 +1012,9 @@ export const DocumentEditorPage: React.FC = () => {
         {/* ENGINE 1: Euro-Office (Sovereign Microsoft-Compatible Suite) Canvas */}
         <div className={`flex-1 w-full h-full relative overflow-hidden bg-slate-100 ${activeEngine === 'euro-office' ? 'block' : 'hidden'}`}>
           {!isEditorInitialized && !editorLoadError && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-10 gap-3">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-              <p className="text-xs font-semibold text-slate-700">Connecting to Euro-Office Suite Engine (Offline)...</p>
-              <p className="text-[11px] text-slate-400">Loading Microsoft Office-compatible workspace</p>
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-xs border border-slate-200/90 px-4 py-2 rounded-xl text-xs text-slate-700 shadow-md z-20 flex items-center gap-2.5">
+              <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+              <span className="font-medium">Connecting to Euro-Office Suite Engine...</span>
             </div>
           )}
           {editorLoadError && (
