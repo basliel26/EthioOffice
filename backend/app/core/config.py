@@ -29,6 +29,9 @@ class Settings(BaseSettings):
         "http://192.168.137.53:5173",
         "http://192.168.137.53:5174",
         "http://10.18.113.9",
+        "http://10.18.113.252",
+        "http://10.18.113.252:8000",
+        "http://10.18.113.252:3000",
     ]
     
     # Database
@@ -52,7 +55,7 @@ class Settings(BaseSettings):
     # Euro-Office / Document Server Integration (100% On-Premise & Offline)
     EURO_OFFICE_URL: str = "http://10.18.113.9"
     EURO_OFFICE_JWT_SECRET: str = "euro-office-secret-change-in-production"
-    BACKEND_INTERNAL_URL: str = "http://192.168.137.53:8000"
+    BACKEND_INTERNAL_URL: str = "http://10.18.113.252:8000"
 
     model_config = SettingsConfigDict(
         env_file=".env",
