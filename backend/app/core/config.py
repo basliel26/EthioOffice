@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_MB: int = 500
     
     # Euro-Office / Document Server Integration (100% On-Premise & Offline)
-    EURO_OFFICE_URL: str = "http://10.18.113.9:80"
+    EURO_OFFICE_URL: str = "http://10.18.113.9"
     EURO_OFFICE_JWT_SECRET: str = "euro-office-secret-change-in-production"
     BACKEND_INTERNAL_URL: str = "http://192.168.137.53:8000"
 

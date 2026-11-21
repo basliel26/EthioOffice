@@ -222,8 +222,13 @@ export const DocumentEditorPage: React.FC = () => {
     }
 
     const scriptId = 'euro-office-api-script';
-    const serverUrl = docConfig.server_url || 'http://10.18.113.9:80';
-    const scriptUrl = `${serverUrl.replace(/\/+$/, '')}/web-apps/apps/api/documents/api.js`;
+    const configuredServer = docConfig.server_url && !docConfig.server_url.includes('localhost:8080')
+      ? docConfig.server_url
+      : 'http://10.18.113.9';
+    const serverUrl = configuredServer.replace(/:80(?=\/|$)/, '').replace(/\/+$/, '');
+    const scriptUrl = `${serverUrl}/web-apps/apps/api/documents/api.js`;
+
+    console.log('[Euro-Office] Target server:', serverUrl, 'Script:', scriptUrl);
 
     const initEditor = () => {
       if (!window.DocsAPI) {
@@ -311,10 +316,10 @@ export const DocumentEditorPage: React.FC = () => {
       setIsDocumentServerOnline(true);
       initEditor();
     };
-    script.onerror = () => {
+    script.onerror = (e) => {
+      console.error('[Euro-Office] Script failed to load from:', scriptUrl, e);
       setIsDocumentServerOnline(false);
-      setEditorLoadError(`Unable to load Euro-Office from ${serverUrl}. Switched to Native Canvas.`);
-      setActiveEngine('native');
+      setEditorLoadError(`Unable to reach Euro-Office at ${scriptUrl}. Check browser console (F12) or server network.`);
     };
     document.body.appendChild(script);
 
@@ -983,7 +988,7 @@ export const DocumentEditorPage: React.FC = () => {
       <div className="flex-1 relative flex min-h-0 overflow-hidden">
         {/* ENGINE 1: Euro-Office (Sovereign Microsoft-Compatible Suite) Canvas */}
         <div className={`flex-1 w-full h-full relative overflow-hidden bg-slate-100 ${activeEngine === 'euro-office' ? 'block' : 'hidden'}`}>
-          {!isEditorInitialized && (
+          {!isEditorInitialized && !editorLoadError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-10 gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
               <p className="text-xs font-semibold text-slate-700">Connecting to Euro-Office Suite Engine (Offline)...</p>
