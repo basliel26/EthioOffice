@@ -226,9 +226,8 @@ export const DocumentEditorPage: React.FC = () => {
       ? docConfig.server_url
       : 'http://10.18.113.9';
     const serverUrl = configuredServer.replace(/:80(?=\/|$)/, '').replace(/\/+$/, '');
-    const scriptUrl = `${serverUrl}/web-apps/apps/api/documents/api.js`;
-
-    console.log('[Euro-Office] Target server:', serverUrl, 'Script:', scriptUrl);
+    const directScriptUrl = `${serverUrl}/web-apps/apps/api/documents/api.js`;
+    const proxiedScriptUrl = `/euro-office-server/web-apps/apps/api/documents/api.js`;
 
     const initEditor = () => {
       if (!window.DocsAPI) {
@@ -297,7 +296,7 @@ export const DocumentEditorPage: React.FC = () => {
 
     const existingScript = document.getElementById(scriptId) as HTMLScriptElement | null;
     if (existingScript) {
-      if (existingScript.src === scriptUrl) {
+      if (existingScript.src.includes('api.js')) {
         setIsDocumentServerOnline(true);
         initEditor();
         return;
@@ -308,20 +307,34 @@ export const DocumentEditorPage: React.FC = () => {
       }
     }
 
-    const script = document.createElement('script');
-    script.id = scriptId;
-    script.src = scriptUrl;
-    script.async = true;
-    script.onload = () => {
-      setIsDocumentServerOnline(true);
-      initEditor();
+    let triedProxy = false;
+    const loadScript = (targetUrl: string) => {
+      console.log('[Euro-Office] Attempting to load DocsAPI script from:', targetUrl);
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = targetUrl;
+      script.async = true;
+      script.onload = () => {
+        console.log('[Euro-Office] Successfully loaded DocsAPI from:', targetUrl);
+        setIsDocumentServerOnline(true);
+        initEditor();
+      };
+      script.onerror = (e) => {
+        console.warn('[Euro-Office] Script failed to load from:', targetUrl, e);
+        if (!triedProxy && targetUrl !== proxiedScriptUrl) {
+          triedProxy = true;
+          script.remove();
+          console.log('[Euro-Office] Browser security blocked direct IP; falling back to same-origin proxy:', proxiedScriptUrl);
+          loadScript(proxiedScriptUrl);
+        } else {
+          setIsDocumentServerOnline(false);
+          setEditorLoadError(`Unable to reach Euro-Office at ${targetUrl}. Check browser console (F12) or server network.`);
+        }
+      };
+      document.body.appendChild(script);
     };
-    script.onerror = (e) => {
-      console.error('[Euro-Office] Script failed to load from:', scriptUrl, e);
-      setIsDocumentServerOnline(false);
-      setEditorLoadError(`Unable to reach Euro-Office at ${scriptUrl}. Check browser console (F12) or server network.`);
-    };
-    document.body.appendChild(script);
+
+    loadScript(directScriptUrl);
 
     return () => {
       if (editorInstanceRef.current && typeof editorInstanceRef.current.destroyEditor === 'function') {
