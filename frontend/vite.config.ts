@@ -12,7 +12,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://10.18.113.252:8001',
         changeOrigin: true,
       },
       '/euro-office-server': {
