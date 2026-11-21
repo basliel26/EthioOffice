@@ -46,7 +46,8 @@ class EuroOfficeConfigResponse(BaseModel):
     documentType: str  # "word" | "cell" | "slide"
     document: DocumentObject
     editorConfig: EditorConfig
-    token: str
+    token: str = ""
+    server_url: str = ""
 
 
 class EuroOfficeCallbackPayload(BaseModel):

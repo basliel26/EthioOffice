@@ -183,14 +183,15 @@ export const DocumentEditorPage: React.FC = () => {
       // Check Euro-Office Document Server connectivity probe
       try {
         const health = await euroOfficeApi.getHealth();
-        const isUp = health.status === 'UP';
-        setIsDocumentServerOnline(isUp);
-        // If server is online, default to Euro-Office server engine; otherwise native canvas
-        setActiveEngine(isUp ? 'euro-office' : 'native');
+        setIsDocumentServerOnline(health.status === 'UP');
       } catch {
         setIsDocumentServerOnline(false);
-        setActiveEngine('native');
       }
+
+      // Automatically default to Euro-Office for Office files if docConfig is available
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      const isOfficeFormat = ['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'odt', 'ods', 'odp', 'rtf', 'txt'].includes(ext);
+      setActiveEngine(isOfficeFormat ? 'euro-office' : 'native');
 
       // Pre-fetch versions for history drawer
       try {
@@ -216,18 +217,21 @@ export const DocumentEditorPage: React.FC = () => {
 
   // 2. Euro-Office Offline DocsAPI Loader & Mount
   useEffect(() => {
-    if (activeEngine !== 'euro-office' || !isDocumentServerOnline || !docConfig) {
+    if (activeEngine !== 'euro-office' || !docConfig) {
       return;
     }
 
     const scriptId = 'euro-office-api-script';
-    const scriptUrl = 'http://localhost:8080/web-apps/apps/api/documents/api.js';
+    const serverUrl = docConfig.server_url || 'http://10.18.113.9:80';
+    const scriptUrl = `${serverUrl.replace(/\/+$/, '')}/web-apps/apps/api/documents/api.js`;
 
     const initEditor = () => {
       if (!window.DocsAPI) {
-        setEditorLoadError('Euro-Office DocsAPI not found on local Document Server');
+        setEditorLoadError('Euro-Office DocsAPI not found on Document Server');
         return;
       }
+      setIsDocumentServerOnline(true);
+      setEditorLoadError(null);
 
       if (editorInstanceRef.current && typeof editorInstanceRef.current.destroyEditor === 'function') {
         try {
@@ -288,21 +292,28 @@ export const DocumentEditorPage: React.FC = () => {
 
     const existingScript = document.getElementById(scriptId) as HTMLScriptElement | null;
     if (existingScript) {
-      existingScript.onload = () => initEditor();
-      existingScript.onerror = () => {
-        setIsDocumentServerOnline(false);
-        setActiveEngine('native');
-      };
-      return;
+      if (existingScript.src === scriptUrl) {
+        setIsDocumentServerOnline(true);
+        initEditor();
+        return;
+      }
+      existingScript.remove();
+      if ('DocsAPI' in window) {
+        delete (window as unknown as { DocsAPI?: unknown }).DocsAPI;
+      }
     }
 
     const script = document.createElement('script');
     script.id = scriptId;
     script.src = scriptUrl;
     script.async = true;
-    script.onload = () => initEditor();
+    script.onload = () => {
+      setIsDocumentServerOnline(true);
+      initEditor();
+    };
     script.onerror = () => {
       setIsDocumentServerOnline(false);
+      setEditorLoadError(`Unable to load Euro-Office from ${serverUrl}. Switched to Native Canvas.`);
       setActiveEngine('native');
     };
     document.body.appendChild(script);
@@ -499,7 +510,7 @@ export const DocumentEditorPage: React.FC = () => {
           setDocConfig(cfg);
         }
       } else {
-        alert('Euro-Office Document Server is still unreachable on port 8080.');
+        alert(`Euro-Office Document Server is still unreachable at ${health.document_server_url || '10.18.113.9:80'}.`);
       }
     } catch {
       setIsDocumentServerOnline(false);
@@ -622,26 +633,26 @@ export const DocumentEditorPage: React.FC = () => {
           <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200/80">
             <button
               type="button"
-              onClick={() => setActiveEngine('euro-office')}
-              disabled={!isDocumentServerOnline}
+              onClick={() => {
+                setActiveEngine('euro-office');
+                setEditorLoadError(null);
+              }}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
                 activeEngine === 'euro-office'
                   ? 'bg-white text-blue-600 shadow-2xs'
-                  : !isDocumentServerOnline
-                  ? 'text-slate-400 cursor-not-allowed opacity-60'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
               title={
                 isDocumentServerOnline
-                  ? 'Euro-Office Sovereign Suite (Port 8080)'
-                  : 'Euro-Office Document Server is offline on port 8080'
+                  ? 'Euro-Office Sovereign Suite (Online)'
+                  : 'Euro-Office Sovereign Suite (Click to connect)'
               }
             >
               <Monitor className="w-3 h-3" />
               <span>Euro-Office</span>
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  isDocumentServerOnline ? 'bg-emerald-500' : 'bg-slate-300'
+                  isDocumentServerOnline ? 'bg-emerald-500' : 'bg-amber-400'
                 }`}
               />
             </button>
@@ -971,7 +982,7 @@ export const DocumentEditorPage: React.FC = () => {
       {/* 4. Main Document Workspace (Dual Engine Display) */}
       <div className="flex-1 relative flex min-h-0 overflow-hidden">
         {/* ENGINE 1: Euro-Office (Sovereign Microsoft-Compatible Suite) Canvas */}
-        <div className={`flex-1 w-full h-full relative overflow-hidden bg-slate-100 ${activeEngine === 'euro-office' && isDocumentServerOnline ? 'block' : 'hidden'}`}>
+        <div className={`flex-1 w-full h-full relative overflow-hidden bg-slate-100 ${activeEngine === 'euro-office' ? 'block' : 'hidden'}`}>
           {!isEditorInitialized && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-10 gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />

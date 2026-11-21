@@ -326,6 +326,7 @@ export interface EuroOfficeConfigResponse {
   document: DocumentObject;
   editorConfig: EditorConfig;
   token: string;
+  server_url?: string;
 }
 
 export interface CoAuthorItem {

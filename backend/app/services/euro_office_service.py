@@ -92,7 +92,7 @@ def get_document_type(filename: str) -> Optional[str]:
 def fetch_edited_document(url: str) -> bytes:
     """Downloads updated document binary payload from the Document Server callback URL."""
     try:
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=30.0, trust_env=False) as client:
             resp = client.get(url)
             resp.raise_for_status()
             return resp.content
@@ -110,7 +110,7 @@ def send_document_command(payload: Dict[str, Any]) -> Dict[str, Any]:
     body = {**payload, "token": token}
     command_url = f"{settings.EURO_OFFICE_URL.rstrip('/')}/coauthoring/CommandService.ashx"
     try:
-        with httpx.Client(timeout=5.0) as client:
+        with httpx.Client(timeout=5.0, trust_env=False) as client:
             resp = client.post(command_url, json=body, headers=headers)
             if resp.status_code == 200:
                 return resp.json()
@@ -257,19 +257,22 @@ class EuroOfficeService:
             ),
         )
 
-        # 4. Generate Master ONLYOFFICE Configuration JWT
-        full_payload = {
-            "documentType": doc_type,
-            "document": doc_obj.model_dump(),
-            "editorConfig": editor_cfg.model_dump(),
-        }
-        signed_token = jwt.encode(full_payload, settings.EURO_OFFICE_JWT_SECRET, algorithm="HS256")
+        # 4. Generate Master ONLYOFFICE Configuration JWT (if secret is configured)
+        signed_token = ""
+        if settings.EURO_OFFICE_JWT_SECRET:
+            full_payload = {
+                "documentType": doc_type,
+                "document": doc_obj.model_dump(),
+                "editorConfig": editor_cfg.model_dump(),
+            }
+            signed_token = jwt.encode(full_payload, settings.EURO_OFFICE_JWT_SECRET, algorithm="HS256")
 
         return EuroOfficeConfigResponse(
             documentType=doc_type,
             document=doc_obj,
             editorConfig=editor_cfg,
             token=signed_token,
+            server_url=settings.EURO_OFFICE_URL,
         )
 
     @classmethod
@@ -540,9 +543,9 @@ class EuroOfficeService:
         status_result = "DOWN"
 
         try:
-            with httpx.Client(timeout=httpx.Timeout(1.0)) as client:
+            with httpx.Client(timeout=httpx.Timeout(5.0), trust_env=False) as client:
                 resp = client.get(probe_url)
-                if resp.status_code == 200 and resp.text.strip().lower() == "true":
+                if resp.status_code == 200:
                     status_result = "UP"
                 else:
                     status_result = "DEGRADED"

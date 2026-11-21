@@ -26,6 +26,9 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
         "http://127.0.0.1:3000",
+        "http://192.168.137.53:5173",
+        "http://192.168.137.53:5174",
+        "http://10.18.113.9",
     ]
     
     # Database
@@ -40,16 +43,16 @@ class Settings(BaseSettings):
     def SQLALCHEMY_DATABASE_URI(self) -> str:
         if self.DATABASE_URL:
             return self.DATABASE_URL
-        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        return f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
     
     # File Storage
     STORAGE_ROOT: str = "./storage_data"
     MAX_UPLOAD_SIZE_MB: int = 500
     
     # Euro-Office / Document Server Integration (100% On-Premise & Offline)
-    EURO_OFFICE_URL: str = "http://localhost:8080"
+    EURO_OFFICE_URL: str = "http://10.18.113.9:80"
     EURO_OFFICE_JWT_SECRET: str = "euro-office-secret-change-in-production"
-    BACKEND_INTERNAL_URL: str = "http://host.docker.internal:8000"
+    BACKEND_INTERNAL_URL: str = "http://192.168.137.53:8000"
 
     model_config = SettingsConfigDict(
         env_file=".env",
