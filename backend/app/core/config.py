@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     
     # Euro-Office / Document Server Integration (100% On-Premise & Offline)
     EURO_OFFICE_URL: str = "http://10.18.113.9"
-    EURO_OFFICE_JWT_SECRET: str = "euro-office-secret-change-in-production"
+    EURO_OFFICE_JWT_SECRET: str = "nkuJcQeu3y7pPg4UaJLonFkoHtVeQyDT"
     BACKEND_INTERNAL_URL: str = "http://10.18.113.252:8001"
 
     model_config = SettingsConfigDict(
