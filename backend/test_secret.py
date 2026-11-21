@@ -4,6 +4,7 @@ from jose import jwt
 import httpx
 
 candidates = [
+    "nkuJcQeu3y7pPg4UaJLonFkoHtVeQyDT",
     "euro-office-secret-change-in-production",
     "secret",
     "onlyoffice",
