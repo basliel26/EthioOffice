@@ -7,9 +7,20 @@ import {
   FileText,
   Paperclip,
   ChevronRight,
+  Send,
+  AlertTriangle,
+  RotateCcw,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Building2,
 } from 'lucide-react';
-import { lettersApi } from '../../api/client';
-import type { LetterRecord, LetterDetail } from '../../api/types';
+import { lettersApi, departmentsApi } from '../../api/client';
+import type {
+  LetterRecord,
+  LetterDetail,
+  LetterAnalyticsSummary,
+  DepartmentItem,
+} from '../../api/types';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
@@ -18,7 +29,15 @@ import { Tabs } from '../../components/ui/Tabs';
 
 export const LettersPage: React.FC = () => {
   const [letters, setLetters] = useState<LetterRecord[]>([]);
+  const [summary, setSummary] = useState<LetterAnalyticsSummary | null>(null);
+  const [departments, setDepartments] = useState<DepartmentItem[]>([]);
+
+  // Filtering states
   const [directionTab, setDirectionTab] = useState<'ALL' | 'INWARD' | 'OUTWARD' | 'INTERNAL_MEMO'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [urgencyFilter, setUrgencyFilter] = useState<string>('ALL');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
+  const [isOverdueOnly, setIsOverdueOnly] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -42,13 +61,35 @@ export const LettersPage: React.FC = () => {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectModal, setShowRejectModal] = useState(false);
 
+  const loadSummaryAndDepts = async () => {
+    try {
+      const [sum, depts] = await Promise.all([
+        lettersApi.getAnalyticsSummary(),
+        departmentsApi.list().catch(() => []),
+      ]);
+      setSummary(sum);
+      setDepartments(depts);
+    } catch {
+      // ignore
+    }
+  };
+
   const loadLetters = async () => {
     setIsLoading(true);
     try {
       const direction = directionTab === 'ALL' ? undefined : directionTab;
+      const status = statusFilter === 'ALL' ? undefined : statusFilter;
+      const urgency = urgencyFilter === 'ALL' ? undefined : urgencyFilter;
+      const department_id = departmentFilter === 'ALL' ? undefined : departmentFilter;
+      const is_overdue = isOverdueOnly ? true : undefined;
+
       const data = await lettersApi.list({
         direction,
-        search: searchQuery || undefined,
+        status,
+        urgency,
+        department_id,
+        is_overdue,
+        search: searchQuery.trim() || undefined,
       });
       setLetters(data);
     } catch {
@@ -59,8 +100,29 @@ export const LettersPage: React.FC = () => {
   };
 
   useEffect(() => {
+    loadSummaryAndDepts();
+  }, []);
+
+  useEffect(() => {
     loadLetters();
-  }, [directionTab, searchQuery]);
+  }, [directionTab, statusFilter, urgencyFilter, departmentFilter, isOverdueOnly, searchQuery]);
+
+  const handleResetFilters = () => {
+    setDirectionTab('ALL');
+    setStatusFilter('ALL');
+    setUrgencyFilter('ALL');
+    setDepartmentFilter('ALL');
+    setIsOverdueOnly(false);
+    setSearchQuery('');
+  };
+
+  const isFiltered =
+    directionTab !== 'ALL' ||
+    statusFilter !== 'ALL' ||
+    urgencyFilter !== 'ALL' ||
+    departmentFilter !== 'ALL' ||
+    isOverdueOnly ||
+    searchQuery.trim().length > 0;
 
   const handleOpenDetail = async (id: string) => {
     try {
@@ -101,6 +163,7 @@ export const LettersPage: React.FC = () => {
         notes: '',
       });
       loadLetters();
+      loadSummaryAndDepts();
     } catch {
       // ignore
     }
@@ -112,6 +175,7 @@ export const LettersPage: React.FC = () => {
       const updated = await lettersApi.approve(selectedLetter.id);
       setSelectedLetter(updated);
       loadLetters();
+      loadSummaryAndDepts();
     } catch {
       // ignore
     }
@@ -125,6 +189,7 @@ export const LettersPage: React.FC = () => {
       setShowRejectModal(false);
       setRejectionReason('');
       loadLetters();
+      loadSummaryAndDepts();
     } catch {
       // ignore
     }
@@ -136,6 +201,34 @@ export const LettersPage: React.FC = () => {
     { id: 'OUTWARD', label: 'ወጪ ደብዳቤዎች (Outward)' },
     { id: 'INTERNAL_MEMO', label: 'የውስጥ ማስታወሻ (Internal Memos)' },
   ];
+
+  const getDirectionBadge = (direction: string) => {
+    switch (direction) {
+      case 'INWARD':
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 bg-blue-50/90 px-2 py-0.5 rounded-md">
+            <ArrowDownLeft className="w-3 h-3 text-blue-600" />
+            ገቢ (Inward)
+          </span>
+        );
+      case 'OUTWARD':
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50/90 px-2 py-0.5 rounded-md">
+            <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+            ወጪ (Outward)
+          </span>
+        );
+      case 'INTERNAL_MEMO':
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-purple-700 bg-purple-50/90 px-2 py-0.5 rounded-md">
+            <FileText className="w-3 h-3 text-purple-600" />
+            ማስታወሻ (Memo)
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -149,6 +242,8 @@ export const LettersPage: React.FC = () => {
         return <Badge variant="default" dot>የደረሰ (Received)</Badge>;
       case 'ARCHIVED':
         return <Badge variant="neutral">የተመዘገበ (Archived)</Badge>;
+      case 'REJECTED':
+        return <Badge variant="danger" dot>ተመላሽ የተደረገ (Rejected)</Badge>;
       default:
         return <Badge variant="neutral">ረቂቅ (Draft)</Badge>;
     }
@@ -177,6 +272,118 @@ export const LettersPage: React.FC = () => {
         </Button>
       </div>
 
+      {/* Executive KPI Ribbon */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        {/* Total Letters */}
+        <div
+          onClick={() => {
+            setDirectionTab('ALL');
+            setStatusFilter('ALL');
+            setIsOverdueOnly(false);
+          }}
+          className={`p-4 rounded-xl border transition-all cursor-pointer bg-white ${
+            directionTab === 'ALL' && statusFilter === 'ALL' && !isOverdueOnly
+              ? 'border-blue-400/80 shadow-xs ring-1 ring-blue-100'
+              : 'border-zinc-200/60 hover:border-zinc-300 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-500">ጠቅላላ መዝገብ (Total)</span>
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Mail className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-zinc-900 tracking-tight mt-1.5">
+            {summary?.total_letters ?? 0}
+          </div>
+          <p className="text-[11px] text-zinc-400 mt-1 truncate">
+            ገቢ {summary?.inward_count ?? 0} • ወጪ {summary?.outward_count ?? 0} • ማስታወሻ {summary?.memo_count ?? 0}
+          </p>
+        </div>
+
+        {/* Pending Approvals */}
+        <div
+          onClick={() => {
+            setStatusFilter(statusFilter === 'PENDING_APPROVAL' ? 'ALL' : 'PENDING_APPROVAL');
+            setIsOverdueOnly(false);
+          }}
+          className={`p-4 rounded-xl border transition-all cursor-pointer bg-white ${
+            statusFilter === 'PENDING_APPROVAL'
+              ? 'border-amber-400 shadow-xs ring-1 ring-amber-100 bg-amber-50/20'
+              : 'border-zinc-200/60 hover:border-zinc-300 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-500">ይሁንታ የሚጠብቁ (Pending)</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-zinc-900 tracking-tight mt-1.5">
+            {summary?.pending_approval_count ?? 0}
+          </div>
+          <p className="text-[11px] text-amber-600 font-medium mt-1 truncate">
+            {summary?.urgent_open_count ?? 0} አስቸኳይ ይሁንታ የሚጠብቁ
+          </p>
+        </div>
+
+        {/* Dispatched */}
+        <div
+          onClick={() => {
+            setStatusFilter(statusFilter === 'DISPATCHED' ? 'ALL' : 'DISPATCHED');
+            setIsOverdueOnly(false);
+          }}
+          className={`p-4 rounded-xl border transition-all cursor-pointer bg-white ${
+            statusFilter === 'DISPATCHED'
+              ? 'border-emerald-400 shadow-xs ring-1 ring-emerald-100 bg-emerald-50/20'
+              : 'border-zinc-200/60 hover:border-zinc-300 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-500">የተላኩ / የወጡ (Dispatched)</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Send className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-zinc-900 tracking-tight mt-1.5">
+            {summary?.dispatched_count ?? 0}
+          </div>
+          <p className="text-[11px] text-zinc-400 mt-1 truncate">
+            የደረሱ {summary?.received_count ?? 0} • የተመዘገቡ {summary?.archived_count ?? 0}
+          </p>
+        </div>
+
+        {/* Overdue SLA */}
+        <div
+          onClick={() => {
+            setIsOverdueOnly(!isOverdueOnly);
+            if (!isOverdueOnly) setStatusFilter('ALL');
+          }}
+          className={`p-4 rounded-xl border transition-all cursor-pointer bg-white ${
+            isOverdueOnly
+              ? 'border-rose-400 shadow-xs ring-1 ring-rose-100 bg-rose-50/20'
+              : 'border-zinc-200/60 hover:border-zinc-300 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-500">የጊዜ ገደብ ያለፈባቸው (Overdue)</span>
+            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+          </div>
+          <div
+            className={`text-2xl font-bold tracking-tight mt-1.5 ${
+              (summary?.overdue_sla_count ?? 0) > 0 ? 'text-rose-600' : 'text-zinc-900'
+            }`}
+          >
+            {summary?.overdue_sla_count ?? 0}
+          </div>
+          <p className="text-[11px] text-zinc-400 mt-1 truncate">
+            የኢትዮጵያ የስራ ቀናት SLA
+          </p>
+        </div>
+      </div>
+
       {/* Filter Tabs & Search Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <Tabs
@@ -187,12 +394,91 @@ export const LettersPage: React.FC = () => {
 
         <div className="w-full sm:w-72">
           <Input
-            placeholder="በቁጥር፣ ርዕስ ወይም ላኪ ፈልግ..."
+            placeholder="በቁጥር፣ ርዕስ፣ ላኪ ወይም ተቀባይ ፈልግ..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             leftIcon={<Search className="w-3.5 h-3.5" />}
           />
         </div>
+      </div>
+
+      {/* Secondary Filter Dropdowns & SLA Controls */}
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        {/* Status Filter */}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          aria-label="Filter by letter status"
+          className="text-xs font-medium text-zinc-700 bg-white border border-zinc-200/80 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-zinc-400"
+        >
+          <option value="ALL">ሁሉም ሁኔታዎች (All Statuses)</option>
+          <option value="DRAFT">ረቂቅ (Draft)</option>
+          <option value="PENDING_APPROVAL">ይሁንታ የሚጠብቅ (Pending Approval)</option>
+          <option value="APPROVED">የጸደቀ (Approved)</option>
+          <option value="DISPATCHED">የተላከ (Dispatched)</option>
+          <option value="RECEIVED">የደረሰ (Received)</option>
+          <option value="ARCHIVED">በመዝገብ የገባ (Archived)</option>
+        </select>
+
+        {/* Urgency Filter */}
+        <select
+          value={urgencyFilter}
+          onChange={(e) => setUrgencyFilter(e.target.value)}
+          aria-label="Filter by letter urgency"
+          className="text-xs font-medium text-zinc-700 bg-white border border-zinc-200/80 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-zinc-400"
+        >
+          <option value="ALL">ሁሉም አጣዳፊነት (All Urgencies)</option>
+          <option value="NORMAL">መደበኛ - 5 ቀናት (Normal)</option>
+          <option value="URGENT">አስቸኳይ - 3 ቀናት (Urgent)</option>
+          <option value="VERY_URGENT">በጣም አስቸኳይ - 24 ሰዓት (Very Urgent)</option>
+        </select>
+
+        {/* Department Filter */}
+        {departments.length > 0 && (
+          <select
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            aria-label="Filter by department"
+            className="text-xs font-medium text-zinc-700 bg-white border border-zinc-200/80 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-zinc-400"
+          >
+            <option value="ALL">ሁሉም የስራ ክፍሎች (All Departments)</option>
+            {departments.map((dept) => (
+              <option key={dept.id} value={dept.id}>
+                {dept.name} ({dept.code})
+              </option>
+            ))}
+          </select>
+        )}
+
+        {/* Overdue Toggle */}
+        <button
+          type="button"
+          onClick={() => setIsOverdueOnly(!isOverdueOnly)}
+          className={`px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+            isOverdueOnly
+              ? 'bg-rose-50 text-rose-700 border border-rose-200'
+              : 'bg-white text-zinc-600 border border-zinc-200/80 hover:bg-zinc-50'
+          }`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              isOverdueOnly ? 'bg-rose-600 animate-pulse' : 'bg-zinc-400'
+            }`}
+          />
+          የጊዜ ገደብ ያለፈባቸው (Overdue Only)
+        </button>
+
+        {/* Reset Filters Button */}
+        {isFiltered && (
+          <button
+            type="button"
+            onClick={handleResetFilters}
+            className="px-2.5 py-1.5 text-xs font-medium rounded-lg text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 transition-colors flex items-center gap-1"
+          >
+            <RotateCcw className="w-3 h-3" />
+            ዳግም ጀምር (Clear Filters)
+          </button>
+        )}
       </div>
 
       {/* Letters Data Table */}
@@ -213,15 +499,22 @@ export const LettersPage: React.FC = () => {
                 onClick={() => handleOpenDetail(letter.id)}
                 className="flex items-center justify-between p-4 hover:bg-zinc-50/70 transition-colors cursor-pointer group"
               >
-                {/* Left: Ref number, Subject, Direction */}
+                {/* Left: Ref number, Subject, Direction, Tags */}
                 <div className="min-w-0 flex-1 pr-4">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
                     <span className="font-mono text-xs font-semibold text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">
                       {letter.reference_number}
                     </span>
+                    {getDirectionBadge(letter.direction)}
                     {getStatusBadge(letter.status)}
                     {letter.urgency === 'VERY_URGENT' && (
                       <Badge variant="danger">አስቸኳይ</Badge>
+                    )}
+                    {letter.department_name && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500 bg-zinc-100/70 px-2 py-0.5 rounded">
+                        <Building2 className="w-3 h-3 text-zinc-400" />
+                        {letter.department_name}
+                      </span>
                     )}
                   </div>
                   <h4 className="text-xs font-medium text-zinc-900 truncate group-hover:text-zinc-950">
@@ -231,6 +524,15 @@ export const LettersPage: React.FC = () => {
                     <span>ላኪ፦ {letter.sender_entity}</span>
                     <span>•</span>
                     <span>ተቀባይ፦ {letter.recipient_entity}</span>
+                    {letter.attachment_file_id && (
+                      <>
+                        <span>•</span>
+                        <span className="inline-flex items-center gap-1 text-zinc-500">
+                          <Paperclip className="w-3 h-3" />
+                          ተያያዥ ሰነድ
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -241,9 +543,11 @@ export const LettersPage: React.FC = () => {
                       {letter.date_ec}
                     </span>
                     {letter.days_remaining !== undefined && letter.days_remaining !== null && (
-                      <span className={`text-[10px] ${
-                        letter.is_overdue ? 'text-red-500 font-semibold' : 'text-zinc-400'
-                      }`}>
+                      <span
+                        className={`text-[10px] ${
+                          letter.is_overdue ? 'text-red-500 font-semibold' : 'text-zinc-400'
+                        }`}
+                      >
                         {letter.is_overdue ? 'የጊዜ ገደብ አልፏል' : `ቀሪ ${letter.days_remaining} ቀናት`}
                       </span>
                     )}
