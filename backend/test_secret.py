@@ -14,7 +14,7 @@ candidates = [
     "password",
 ]
 
-target_url = "http://10.18.113.9/coauthoring/CommandService.ashx"
+target_url = "http://10.18.113.13/coauthoring/CommandService.ashx"
 
 print(f"[*] Testing EuroOffice JWT Secret against {target_url}...\n")
 

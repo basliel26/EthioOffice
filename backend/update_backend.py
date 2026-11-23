@@ -17,12 +17,19 @@ import urllib.error
 
 ENV_PATH = Path(__file__).resolve().parent / ".env"
 
+# Allow passing EuroOffice IP as command line argument (default: 10.18.113.13)
+euro_office_ip = sys.argv[1].strip() if len(sys.argv) > 1 else "10.18.113.13"
+if not euro_office_ip.startswith("http"):
+    euro_office_url = f"http://{euro_office_ip}"
+else:
+    euro_office_url = euro_office_ip
+
 DEFAULT_SETTINGS = {
     "PROJECT_NAME": '"EthioOffice API"',
     "API_V1_STR": '"/api/v1"',
     "SECRET_KEY": '"ethiooffice-secure-jwt-key-2026-production-ready"',
     "ACCESS_TOKEN_EXPIRE_MINUTES": "1440",
-    "EURO_OFFICE_URL": '"http://10.18.113.9"',
+    "EURO_OFFICE_URL": f'"{euro_office_url}"',
     "EURO_OFFICE_JWT_SECRET": '"nkuJcQeu3y7pPg4UaJLonFkoHtVeQyDT"',
     "BACKEND_INTERNAL_URL": '"http://10.18.113.252:8001"',
 }
@@ -62,14 +69,14 @@ def update_env():
         f.writelines(lines)
     
     print(f"      [OK] Saved configuration to {ENV_PATH}")
-    print(f"           EURO_OFFICE_URL = http://10.18.113.9")
+    print(f"           EURO_OFFICE_URL = {euro_office_url}")
     print(f"           EURO_OFFICE_JWT_SECRET = nkuJcQeu3y7pPg4UaJLonFkoHtVeQyDT")
     print(f"           BACKEND_INTERNAL_URL = http://10.18.113.252:8001")
 
 
 def verify_eurooffice():
-    print("\n[2/3] Checking connection to EuroOffice Document Server (10.18.113.9)...")
-    url = "http://10.18.113.9/healthcheck"
+    print(f"\n[2/3] Checking connection to EuroOffice Document Server ({euro_office_url})...")
+    url = f"{euro_office_url}/healthcheck"
     try:
         # ProxyHandler({}) ensures requests bypass any system HTTP_PROXY environment variables
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))

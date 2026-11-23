@@ -29,6 +29,7 @@ class Settings(BaseSettings):
         "http://192.168.137.53:5173",
         "http://192.168.137.53:5174",
         "http://10.18.113.9",
+        "http://10.18.113.13",
         "http://10.18.113.252",
         "http://10.18.113.252:8000",
         "http://10.18.113.252:8001",
@@ -57,7 +58,7 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_MB: int = 500
     
     # Euro-Office / Document Server Integration (100% On-Premise & Offline)
-    EURO_OFFICE_URL: str = "http://10.18.113.9"
+    EURO_OFFICE_URL: str = "http://10.18.113.13"
     EURO_OFFICE_JWT_SECRET: str = "nkuJcQeu3y7pPg4UaJLonFkoHtVeQyDT"
     BACKEND_INTERNAL_URL: str = "http://10.18.113.252:8001"
 
