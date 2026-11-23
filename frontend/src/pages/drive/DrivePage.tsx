@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Folder,
@@ -103,18 +103,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     setActiveRowMenuId(null);
   }, [viewMode]);
 
-  // Handle clicking active drive in sidebar: smooth reset to root
-  useEffect(() => {
-    const handleNavRoot = () => {
-      setFiles([]);
-      setCurrentFolderId(null);
-      setSelectedItem(null);
-      setBreadcrumbs([{ id: null, name: getRootBreadcrumbName(viewMode) }]);
-      setSelectedTagFilter(null);
-    };
-    window.addEventListener('ethiooffice-nav-root', handleNavRoot);
-    return () => window.removeEventListener('ethiooffice-nav-root', handleNavRoot);
-  }, [viewMode]);
+
 
   useEffect(() => {
     if (currentFolderId && breadcrumbs.length > 1) {
@@ -297,7 +286,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     },
   ];
 
-  const loadData = async (folderId: string | null = currentFolderId) => {
+  const loadData = useCallback(async (folderId: string | null = currentFolderId) => {
     const reqId = ++requestIdRef.current;
     const key = `${viewMode}_${folderId || 'root'}`;
 
@@ -344,11 +333,39 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         setIsLoading(false);
       }
     }
-  };
+  }, [viewMode]);
 
   useEffect(() => {
     loadData(currentFolderId);
-  }, [viewMode, currentFolderId]);
+  }, [loadData, currentFolderId]);
+
+  // Handle clicking active drive in sidebar: smooth reset to root and reliably reload files
+  useEffect(() => {
+    const handleNavRoot = (e: Event) => {
+      const customEv = e as CustomEvent<{ targetMode?: string }>;
+      if (customEv?.detail?.targetMode && customEv.detail.targetMode !== viewMode) {
+        return;
+      }
+
+      setCurrentFolderId(null);
+      setSelectedItem(null);
+      setBreadcrumbs([{ id: null, name: getRootBreadcrumbName(viewMode) }]);
+      setSelectedTagFilter(null);
+
+      const rootKey = `${viewMode}_root`;
+      const cached = driveMemoryCache.get(rootKey);
+      if (cached && cached.length > 0) {
+        setFiles(cached);
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
+      loadData(null);
+    };
+
+    window.addEventListener('ethiooffice-nav-root', handleNavRoot);
+    return () => window.removeEventListener('ethiooffice-nav-root', handleNavRoot);
+  }, [viewMode, loadData]);
 
   const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault();

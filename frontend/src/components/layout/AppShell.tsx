@@ -155,11 +155,21 @@ export const AppShell: React.FC = () => {
                 Quick Access
               </p>
               <nav className="space-y-1">
-                <NavLink to="/drive/starred" className={navItemClass} title="Starred">
+                <NavLink
+                  to="/drive/starred"
+                  className={navItemClass}
+                  title="Starred"
+                  onClick={() => window.dispatchEvent(new CustomEvent('ethiooffice-nav-root', { detail: { targetMode: 'STARRED' } }))}
+                >
                   <Star className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Starred</span>
                 </NavLink>
-                <NavLink to="/drive/recent" className={navItemClass} title="Recent">
+                <NavLink
+                  to="/drive/recent"
+                  className={navItemClass}
+                  title="Recent"
+                  onClick={() => window.dispatchEvent(new CustomEvent('ethiooffice-nav-root', { detail: { targetMode: 'RECENT' } }))}
+                >
                   <Clock className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Recent</span>
                 </NavLink>
@@ -176,7 +186,7 @@ export const AppShell: React.FC = () => {
                   to="/drive/personal"
                   className={navItemClass}
                   title="Personal Drive"
-                  onClick={() => window.dispatchEvent(new CustomEvent('ethiooffice-nav-root'))}
+                  onClick={() => window.dispatchEvent(new CustomEvent('ethiooffice-nav-root', { detail: { targetMode: 'PERSONAL' } }))}
                 >
                   <HardDrive className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Personal Drive</span>
@@ -185,7 +195,7 @@ export const AppShell: React.FC = () => {
                   to="/drive/company"
                   className={navItemClass}
                   title="Company Drive"
-                  onClick={() => window.dispatchEvent(new CustomEvent('ethiooffice-nav-root'))}
+                  onClick={() => window.dispatchEvent(new CustomEvent('ethiooffice-nav-root', { detail: { targetMode: 'COMPANY' } }))}
                 >
                   <Building2 className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Company Drive</span>
@@ -194,7 +204,7 @@ export const AppShell: React.FC = () => {
                   to="/drive/shared"
                   className={navItemClass}
                   title="Shared with me"
-                  onClick={() => window.dispatchEvent(new CustomEvent('ethiooffice-nav-root'))}
+                  onClick={() => window.dispatchEvent(new CustomEvent('ethiooffice-nav-root', { detail: { targetMode: 'SHARED' } }))}
                 >
                   <Share2 className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Shared with me</span>
@@ -203,7 +213,7 @@ export const AppShell: React.FC = () => {
                   to="/drive/trash"
                   className={navItemClass}
                   title="Recycle Bin"
-                  onClick={() => window.dispatchEvent(new CustomEvent('ethiooffice-nav-root'))}
+                  onClick={() => window.dispatchEvent(new CustomEvent('ethiooffice-nav-root', { detail: { targetMode: 'TRASH' } }))}
                 >
                   <Trash2 className="w-[18px] h-[18px] shrink-0" />
                   <span className={isCollapsed ? 'md:hidden' : ''}>Recycle Bin</span>
