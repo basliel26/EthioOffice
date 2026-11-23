@@ -172,7 +172,8 @@ export const filesApi = {
     return res.data;
   },
   delete: async (fileId: string, permanent: boolean = false): Promise<unknown> => {
-    const res = await api.delete(`/files/${fileId}?permanent=${permanent}`);
+    const url = permanent ? `/files/${fileId}/purge` : `/files/${fileId}`;
+    const res = await api.delete(url);
     return res.data;
   },
   restore: async (fileId: string): Promise<unknown> => {

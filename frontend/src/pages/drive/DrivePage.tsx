@@ -221,18 +221,26 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (newDocMenuRef.current && !newDocMenuRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement | null;
+
+      if (newDocMenuRef.current && !newDocMenuRef.current.contains(target as Node)) {
         setShowNewDocMenu(false);
       }
-      if (tagMenuRef.current && !tagMenuRef.current.contains(e.target as Node)) {
+      if (tagMenuRef.current && !tagMenuRef.current.contains(target as Node)) {
         setShowTagFilterMenu(false);
       }
-      if (typeMenuRef.current && !typeMenuRef.current.contains(e.target as Node)) {
+      if (typeMenuRef.current && !typeMenuRef.current.contains(target as Node)) {
         setShowTypeFilterMenu(false);
       }
-      setCanvasContextMenu(null);
-      setRowContextMenu(null);
-      setActiveRowMenuId(null);
+      if (!target?.closest?.('[data-canvas-menu]')) {
+        setCanvasContextMenu(null);
+      }
+      if (!target?.closest?.('[data-row-context-menu]')) {
+        setRowContextMenu(null);
+      }
+      if (!target?.closest?.('[data-row-menu]')) {
+        setActiveRowMenuId(null);
+      }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -435,9 +443,10 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         await filesApi.star(file.id);
       }
       driveMemoryCache.clear();
-      loadData();
-    } catch {
-      // ignore
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Star operation failed';
+      alert(msg);
     }
   };
 
@@ -449,9 +458,10 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         await filesApi.delete(file.id, false);
       }
       driveMemoryCache.clear();
-      loadData();
-    } catch {
-      // ignore
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Delete failed';
+      alert(msg);
     }
   };
 
@@ -459,9 +469,10 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     try {
       await filesApi.restore(file.id);
       driveMemoryCache.clear();
-      loadData();
-    } catch {
-      // ignore
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Restore failed';
+      alert(msg);
     }
   };
 
@@ -470,9 +481,10 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       await filesApi.emptyTrash();
       setShowEmptyTrashModal(false);
       driveMemoryCache.clear();
-      loadData();
-    } catch {
-      // ignore
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to empty trash';
+      alert(msg);
     }
   };
 
@@ -485,9 +497,10 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       setShowRenameModal(false);
       setTargetFile(null);
       driveMemoryCache.clear();
-      loadData();
-    } catch {
-      // ignore
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Rename failed';
+      alert(msg);
     }
   };
 
@@ -499,9 +512,10 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       setShowTagModal(false);
       setTargetFile(null);
       driveMemoryCache.clear();
-      loadData();
-    } catch {
-      // ignore
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Assigning tags failed';
+      alert(msg);
     }
   };
 
@@ -631,22 +645,24 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         <>
           <button
             type="button"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               setActiveRowMenuId(null);
               handleRestore(file);
             }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-emerald-700 transition-colors cursor-pointer"
+            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-emerald-700 transition-colors cursor-pointer text-left"
           >
             <RotateCcw className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>Restore Item</span>
           </button>
           <button
             type="button"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               setActiveRowMenuId(null);
               handleDelete(file);
             }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-red-50 text-xs font-medium text-red-600 transition-colors cursor-pointer"
+            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-red-50 text-xs font-medium text-red-600 transition-colors cursor-pointer text-left"
           >
             <Trash2 className="w-4 h-4 text-red-600 shrink-0" />
             <span>Delete Permanently</span>
@@ -659,7 +675,8 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       <>
         <button
           type="button"
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             setActiveRowMenuId(null);
             if (file.is_folder) {
               handleOpenFolder(file);
@@ -667,7 +684,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
               navigate(`/editor/${file.id}`);
             }
           }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer text-left"
         >
           <ExternalLink className="w-4 h-4 text-slate-500 shrink-0" />
           <span>{file.is_folder ? 'Open Folder' : 'Open in Editor'}</span>
@@ -675,37 +692,48 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
 
         <button
           type="button"
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             setActiveRowMenuId(null);
             setSelectedItem(file);
             setIsDetailsOpen(true);
             localStorage.setItem('ethiooffice_details_panel_open', 'true');
           }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer text-left"
         >
           <Info className="w-4 h-4 text-slate-500 shrink-0" />
-          <span>Details & Versions</span>
+          <span>Details & Inspector</span>
         </button>
 
         {!file.is_folder && (
-          <a
-            href={`/api/v1/files/${file.id}/download`}
-            onClick={() => setActiveRowMenuId(null)}
-            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors"
+          <button
+            type="button"
+            onClick={async (e) => {
+              e.stopPropagation();
+              setActiveRowMenuId(null);
+              try {
+                await filesApi.downloadFile(file.id, file.name);
+              } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : 'Download failed';
+                alert(`Could not download file: ${msg}`);
+              }
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer text-left"
           >
             <Download className="w-4 h-4 text-slate-500 shrink-0" />
             <span>Download</span>
-          </a>
+          </button>
         )}
 
         <button
           type="button"
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             setActiveRowMenuId(null);
             setTargetFile(file);
             setShowShareModal(true);
           }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer text-left"
         >
           <Share2 className="w-4 h-4 text-slate-500 shrink-0" />
           <span>Share & Permissions</span>
@@ -714,7 +742,8 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         {!file.is_folder && (
           <button
             type="button"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               setActiveRowMenuId(null);
               setTargetFile(file);
               setSelectedTagIds(
@@ -724,7 +753,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
               );
               setShowTagModal(true);
             }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer text-left"
           >
             <TagIcon className="w-4 h-4 text-slate-500 shrink-0" />
             <span>Assign Tags</span>
@@ -733,13 +762,14 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
 
         <button
           type="button"
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             setActiveRowMenuId(null);
             setTargetFile(file);
             setRenameValue(file.name);
             setShowRenameModal(true);
           }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer text-left"
         >
           <Edit2 className="w-4 h-4 text-slate-500 shrink-0" />
           <span>Rename</span>
@@ -747,11 +777,12 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
 
         <button
           type="button"
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             setActiveRowMenuId(null);
             handleToggleStar(file);
           }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer text-left"
         >
           <Star className={`w-4 h-4 ${file.is_starred ? 'fill-amber-400 text-amber-400' : 'text-slate-500'} shrink-0`} />
           <span>{file.is_starred ? 'Remove Star' : 'Add to Starred'}</span>
@@ -761,11 +792,12 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
 
         <button
           type="button"
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             setActiveRowMenuId(null);
             handleDelete(file);
           }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-red-50 text-xs font-medium text-red-600 transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-red-50 text-xs font-medium text-red-600 transition-colors cursor-pointer text-left"
         >
           <Trash2 className="w-4 h-4 text-red-600 shrink-0" />
           <span>Move to Recycle Bin</span>
@@ -1155,13 +1187,15 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                     )}
 
                     {/* Three Dots Action Button */}
-                    <div className="relative">
+                    <div className="relative" data-row-menu>
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          e.nativeEvent?.stopImmediatePropagation?.();
                           setActiveRowMenuId(activeRowMenuId === file.id ? null : file.id);
                         }}
-                        className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                        className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
                         title="More options"
                       >
                         <MoreVertical className="w-3.5 h-3.5" />
@@ -1170,7 +1204,10 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                       {/* Three-dots Menu in Grid View */}
                       {activeRowMenuId === file.id && (
                         <div
-                          onClick={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.nativeEvent?.stopImmediatePropagation?.();
+                          }}
                           className="absolute right-0 top-full mt-1 w-52 rounded-xl bg-white shadow-xl border border-slate-200/90 py-1.5 z-40 animate-scale-up font-sans text-left"
                         >
                           {renderMenuActions(file)}
@@ -1348,24 +1385,34 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                     ) : (
                       <>
                         {!file.is_folder && (
-                          <a
-                            href={`/api/v1/files/${file.id}/download`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition-colors opacity-0 group-hover:opacity-100 hidden sm:inline-block"
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await filesApi.downloadFile(file.id, file.name);
+                              } catch (err: unknown) {
+                                const msg = err instanceof Error ? err.message : 'Download failed';
+                                alert(`Could not download: ${msg}`);
+                              }
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition-colors opacity-0 group-hover:opacity-100 hidden sm:inline-block cursor-pointer"
                             title="Download"
                           >
                             <Download className="w-4 h-4" />
-                          </a>
+                          </button>
                         )}
 
                         {/* Three-Dots Menu Button */}
-                        <div className="relative">
+                        <div className="relative" data-row-menu>
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
+                              e.nativeEvent?.stopImmediatePropagation?.();
                               setActiveRowMenuId(activeRowMenuId === file.id ? null : file.id);
                             }}
-                            className={`p-1.5 rounded-lg transition-colors ${
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                               activeRowMenuId === file.id
                                 ? 'bg-slate-100 text-slate-800'
                                 : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
@@ -1378,7 +1425,10 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                           {/* Dropdown Menu */}
                           {activeRowMenuId === file.id && (
                             <div
-                              onClick={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.nativeEvent?.stopImmediatePropagation?.();
+                              }}
                               className="absolute right-0 top-full mt-1 w-52 rounded-xl bg-white shadow-xl border border-slate-200/90 py-1.5 z-40 animate-scale-up font-sans text-left"
                             >
                               {renderMenuActions(file)}
@@ -1647,6 +1697,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       {/* 7. Canvas Empty Space Right-Click Menu */}
       {canvasContextMenu && (
         <div
+          data-canvas-menu
           style={{ top: `${canvasContextMenu.y}px`, left: `${canvasContextMenu.x}px` }}
           className="fixed z-50 w-56 rounded-xl bg-white shadow-2xl border border-slate-200/90 py-1.5 animate-scale-up font-sans select-none text-left"
         >
@@ -1708,6 +1759,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
       {/* 8. File & Folder Item Right-Click Menu */}
       {rowContextMenu && (
         <div
+          data-row-context-menu
           style={{ top: `${rowContextMenu.y}px`, left: `${rowContextMenu.x}px` }}
           className="fixed z-50 w-52 rounded-xl bg-white shadow-2xl border border-slate-200/90 py-1.5 animate-scale-up font-sans select-none text-left"
         >
@@ -1769,18 +1821,27 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                 className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
               >
                 <Info className="w-4 h-4 text-slate-500 shrink-0" />
-                <span>Details & Versions</span>
+                <span>Details Inspector</span>
               </button>
 
               {!rowContextMenu.file.is_folder && (
-                <a
-                  href={`/api/v1/files/${rowContextMenu.file.id}/download`}
-                  onClick={() => setRowContextMenu(null)}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors"
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const f = rowContextMenu.file;
+                    setRowContextMenu(null);
+                    try {
+                      await filesApi.downloadFile(f.id, f.name);
+                    } catch (err: unknown) {
+                      const msg = err instanceof Error ? err.message : 'Download failed';
+                      alert(`Could not download file: ${msg}`);
+                    }
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer text-left"
                 >
                   <Download className="w-4 h-4 text-slate-500 shrink-0" />
                   <span>Download</span>
-                </a>
+                </button>
               )}
 
               <button

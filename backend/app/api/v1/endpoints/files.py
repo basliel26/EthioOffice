@@ -530,14 +530,17 @@ def rename_item(
 @router.delete("/{item_id}")
 def delete_item(
     item_id: uuid.UUID,
+    permanent: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Move item to Recycle Bin with Cascading Soft-Delete:
-    If a folder is deleted, all its descendant files and subfolders are also marked deleted.
+    Move item to Recycle Bin with Cascading Soft-Delete, or permanently purge if permanent=True.
     """
     try:
+        if permanent:
+            freed_bytes = StorageService.purge_item(db, current_user.organization_id, item_id, actor=current_user)
+            return {"message": f"Item permanently deleted. Freed {freed_bytes} bytes", "freed_bytes": freed_bytes}
         affected = StorageService.soft_delete_item(db, current_user.organization_id, item_id, actor=current_user)
         return {"message": f"Successfully moved {affected} item(s) to Recycle Bin", "affected_count": affected}
     except LicenseReadOnlyLockdownError as e:
