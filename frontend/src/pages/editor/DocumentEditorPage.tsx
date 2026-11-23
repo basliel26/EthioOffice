@@ -14,7 +14,7 @@ import {
   FileSpreadsheet,
   Presentation,
   // X,
-  Sparkles,
+  // Sparkles,
   Save,
   Bold,
   Italic,
@@ -29,8 +29,9 @@ import {
   Heading2,
   // RotateCcw,
   ShieldAlert,
-  Monitor,
-  RefreshCw,
+  // Monitor,
+  // RefreshCw,
+  Pencil,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -72,11 +73,17 @@ export const DocumentEditorPage: React.FC = () => {
   const [coAuthors, setCoAuthors] = useState<CoAuthorItem[]>([]);
 
   // Dual-Engine State ('euro-office' for Euro-Office Document Server, 'native' for built-in A4 canvas)
-  const [activeEngine, setActiveEngine] = useState<'euro-office' | 'native'>('native');
+  const [activeEngine, setActiveEngine] = useState<'euro-office' | 'native'>('euro-office');
   const [isDocumentServerOnline, setIsDocumentServerOnline] = useState(false);
   const [isEditorInitialized, setIsEditorInitialized] = useState(false);
   const [editorLoadError, setEditorLoadError] = useState<string | null>(null);
   const editorInstanceRef = useRef<{ destroyEditor?: () => void } | null>(null);
+
+  // Inline Document Rename State
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [isSavingRename, setIsSavingRename] = useState(false);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   // Content & Editing State (Native Engine)
   const [content, setContent] = useState<string>('');
@@ -508,55 +515,84 @@ export const DocumentEditorPage: React.FC = () => {
     }
   };
 
-  // [HALTED: Version History revert handler disabled for now]
-  // const handleRevertVersion = async (versionNumber: number) => {
-  //   if (!fileId || isReverting) return;
-  //   setIsReverting(true);
-  //   try {
-  //     await filesApi.revertVersion(fileId, versionNumber);
-  //     const textData = await euroOfficeApi.getTextContent(fileId);
-  //     setContent(textData.content || '');
-  //     setOriginalContent(textData.content || '');
-  //     setHasUnsavedChanges(false);
-  //     setSaveStatus('saved');
-  //     const freshVersions = await filesApi.listVersions(fileId);
-  //     setVersions(freshVersions);
-  //     setShowHistoryDrawer(false);
-  //
-  //     // If in Euro-Office mode, reload document config
-  //     if (activeEngine === 'euro-office') {
-  //       const freshConfig = await euroOfficeApi.getConfig(fileId, 'en');
-  //       setDocConfig(freshConfig);
-  //     }
-  //   } catch (err: unknown) {
-  //     const msg = err instanceof Error ? err.message : 'Revert failed';
-  //     alert(`Rollback failed: ${msg}`);
-  //   } finally {
-  //     setIsReverting(false);
-  //   }
-  // };
+  // Inline Document Rename Handlers
+  const handleStartRenaming = () => {
+    if (!fileItem || isLockedByOther) return;
+    const lastDotIdx = fileItem.name.lastIndexOf('.');
+    if (lastDotIdx !== -1) {
+      setEditTitle(fileItem.name.substring(0, lastDotIdx));
+    } else {
+      setEditTitle(fileItem.name);
+    }
+    setIsRenaming(true);
+  };
 
-  // Retry probe for Euro-Office server
-  const handleProbeServer = async () => {
+  const handleCommitRename = async () => {
+    if (!fileItem || isSavingRename) {
+      setIsRenaming(false);
+      return;
+    }
+    const trimmed = editTitle.trim();
+    if (!trimmed) {
+      setIsRenaming(false);
+      return;
+    }
+
+    // Preserve original extension if user omitted it
+    const lastDotIdx = fileItem.name.lastIndexOf('.');
+    const originalExt = lastDotIdx !== -1 ? fileItem.name.substring(lastDotIdx) : '';
+    let targetName = trimmed;
+    if (originalExt && !trimmed.toLowerCase().endsWith(originalExt.toLowerCase())) {
+      targetName = `${trimmed}${originalExt}`;
+    }
+
+    if (targetName === fileItem.name) {
+      setIsRenaming(false);
+      return;
+    }
+
+    setIsSavingRename(true);
     try {
-      const health = await euroOfficeApi.getHealth();
-      const isUp = health.status === 'UP';
-      setIsDocumentServerOnline(isUp);
-      if (isUp) {
-        setActiveEngine('euro-office');
-        setEditorLoadError(null);
-        if (fileId) {
-          const cfg = await euroOfficeApi.getConfig(fileId, 'en');
-          setDocConfig(cfg);
-        }
-      } else {
-        alert(`Euro-Office Document Server is still unreachable at ${health.document_server_url || '10.18.113.9:80'}.`);
-      }
-    } catch {
-      setIsDocumentServerOnline(false);
-      alert('Euro-Office Document Server check failed.');
+      const updated = await filesApi.rename(fileItem.id, targetName);
+      setFileItem(updated);
+      setIsRenaming(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Rename failed';
+      alert(`Could not rename document: ${msg}`);
+      setIsRenaming(false);
+    } finally {
+      setIsSavingRename(false);
     }
   };
+
+  useEffect(() => {
+    if (isRenaming && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [isRenaming]);
+
+  // [REMOVED: Native/Euro-Office switcher probe - Euro-Office is now default]
+  // const handleProbeServer = async () => {
+  //   try {
+  //     const health = await euroOfficeApi.getHealth();
+  //     const isUp = health.status === 'UP';
+  //     setIsDocumentServerOnline(isUp);
+  //     if (isUp) {
+  //       setActiveEngine('euro-office');
+  //       setEditorLoadError(null);
+  //       if (fileId) {
+  //         const cfg = await euroOfficeApi.getConfig(fileId, 'en');
+  //         setDocConfig(cfg);
+  //       }
+  //     } else {
+  //       alert(`Euro-Office Document Server is still unreachable at ${health.document_server_url || '10.18.113.9:80'}.`);
+  //     }
+  //   } catch {
+  //     setIsDocumentServerOnline(false);
+  //     alert('Euro-Office Document Server check failed.');
+  //   }
+  // };
 
   // Formatting Helpers for Native Canvas Textarea
   const applyFormatting = (prefix: string, suffix: string = prefix, placeholder: string = 'text') => {
@@ -644,12 +680,71 @@ export const DocumentEditorPage: React.FC = () => {
             <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 shrink-0">
               {renderDocIcon(fileItem.name, 'w-4 h-4')}
             </div>
-            <span
-              className="text-xs sm:text-sm font-bold text-slate-800 truncate max-w-[130px] sm:max-w-xs md:max-w-sm"
-              title={fileItem.name}
-            >
-              {fileItem.name}
-            </span>
+
+            {/* Document Title with Inline Renaming & Edit Icon */}
+            {isRenaming ? (
+              <div className="flex items-center gap-1">
+                <input
+                  ref={renameInputRef}
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleCommitRename();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setIsRenaming(false);
+                    }
+                  }}
+                  onBlur={handleCommitRename}
+                  disabled={isSavingRename}
+                  className="text-xs sm:text-sm font-bold text-slate-900 bg-white border border-blue-500 rounded px-2 py-0.5 shadow-2xs focus:outline-hidden focus:ring-2 focus:ring-blue-400/50 min-w-[130px] max-w-[220px] sm:max-w-xs"
+                  placeholder="Document name"
+                />
+                {isSavingRename ? (
+                  <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                ) : (
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleCommitRename();
+                    }}
+                    className="p-1 rounded text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
+                    title="Save name"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 group min-w-0">
+                <button
+                  type="button"
+                  onClick={handleStartRenaming}
+                  disabled={isLockedByOther}
+                  className={`text-left text-xs sm:text-sm font-bold text-slate-800 truncate max-w-[140px] sm:max-w-xs md:max-w-sm px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                    isLockedByOther ? 'cursor-default' : 'hover:bg-slate-100 hover:text-blue-700'
+                  }`}
+                  title={isLockedByOther ? `Locked by ${lockHolderName}` : 'Click to rename document'}
+                >
+                  <span className="truncate">{fileItem.name}</span>
+                </button>
+                {!isLockedByOther && (
+                  <button
+                    type="button"
+                    onClick={handleStartRenaming}
+                    className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Rename document"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+
             <Badge variant="neutral" className="uppercase text-[9px] tracking-wider px-1.5 py-0.5">
               {fileItem.name.split('.').pop() || 'DOC'}
             </Badge>
@@ -667,63 +762,8 @@ export const DocumentEditorPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Center: Dual-Engine Switcher + Save Status & Lock Check-out Button */}
+        {/* Center: Save Status Indicator + Lock Check-out Button */}
         <div className="hidden md:flex items-center gap-3 text-xs">
-          {/* Engine Selector */}
-          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200/80">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveEngine('euro-office');
-                setEditorLoadError(null);
-              }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
-                activeEngine === 'euro-office'
-                  ? 'bg-white text-blue-600 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title={
-                isDocumentServerOnline
-                  ? 'Euro-Office Sovereign Suite (Online)'
-                  : 'Euro-Office Sovereign Suite (Click to connect)'
-              }
-            >
-              <Monitor className="w-3 h-3" />
-              <span>Euro-Office</span>
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  isDocumentServerOnline ? 'bg-emerald-500' : 'bg-amber-400'
-                }`}
-              />
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveEngine('native')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
-                activeEngine === 'native'
-                  ? 'bg-white text-blue-600 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Native Sovereign Canvas Editor"
-            >
-              <Sparkles className="w-3 h-3" />
-              <span>Native Canvas</span>
-            </button>
-          </div>
-
-          {!isDocumentServerOnline && (
-            <button
-              type="button"
-              onClick={handleProbeServer}
-              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
-              title="Check if Euro-Office Server is now online"
-            >
-              <RefreshCw className="w-3 h-3" />
-            </button>
-          )}
-
-          <div className="h-3 w-px bg-slate-200" />
-
           {/* Save Status Indicator */}
           <div className="flex items-center gap-1.5">
             {saveStatus === 'saving' ? (

@@ -180,8 +180,6 @@ def create_new_document(
         if ext == ".docx":
             import docx
             doc = docx.Document()
-            doc.add_heading(name.replace(".docx", ""), level=1)
-            doc.add_paragraph("Start drafting your document here...")
             buf = io.BytesIO()
             doc.save(buf)
             content_bytes = buf.getvalue()
@@ -191,8 +189,6 @@ def create_new_document(
             wb = openpyxl.Workbook()
             ws = wb.active
             ws.title = "Sheet1"
-            ws["A1"] = "Title"
-            ws["B1"] = name.replace(".xlsx", "")
             buf = io.BytesIO()
             wb.save(buf)
             content_bytes = buf.getvalue()
@@ -200,18 +196,14 @@ def create_new_document(
         elif ext == ".pptx":
             from pptx import Presentation
             prs = Presentation()
-            title_slide_layout = prs.slide_layouts[0]
-            slide = prs.slides.add_slide(title_slide_layout)
-            title = slide.shapes.title
-            subtitle = slide.placeholders[1]
-            title.text = name.replace(".pptx", "")
-            subtitle.text = "Created in EthioOffice"
+            blank_slide_layout = prs.slide_layouts[6]  # Blank slide template
+            prs.slides.add_slide(blank_slide_layout)
             buf = io.BytesIO()
             prs.save(buf)
             content_bytes = buf.getvalue()
             content_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         else:
-            content_bytes = f"# {name}\n\nStart typing here...\n".encode("utf-8")
+            content_bytes = b""
             content_type = "text/plain"
 
         return StorageService.upload_file_stream(
@@ -513,11 +505,12 @@ def rename_item(
     Rename a folder or file within its current parent.
     """
     try:
+        new_name = payload.name or payload.new_name
         return StorageService.rename_item(
             db=db,
             org_id=current_user.organization_id,
             item_id=item_id,
-            new_name=payload.name,
+            new_name=new_name,
             actor=current_user
         )
     except LicenseReadOnlyLockdownError as e:

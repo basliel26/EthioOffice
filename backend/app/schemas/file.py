@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class BreadcrumbItem(BaseModel):
@@ -32,7 +32,19 @@ class FileMoveRequest(BaseModel):
 
 
 class FileRenameRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255)
+    name: Optional[str] = None
+    new_name: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_name(cls, data):
+        if isinstance(data, dict):
+            val = data.get("name") or data.get("new_name")
+            if not val or not str(val).strip():
+                raise ValueError("Name cannot be empty")
+            data["name"] = str(val).strip()
+            data["new_name"] = str(val).strip()
+        return data
 
 
 class FileLockInfo(BaseModel):

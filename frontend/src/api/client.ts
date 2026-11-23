@@ -164,7 +164,7 @@ export const filesApi = {
     return res.data;
   },
   rename: async (fileId: string, new_name: string): Promise<FileItem> => {
-    const res = await api.patch<FileItem>(`/files/${fileId}/rename`, { new_name });
+    const res = await api.patch<FileItem>(`/files/${fileId}/rename`, { name: new_name, new_name });
     return res.data;
   },
   move: async (fileId: string, new_parent_id: string | null): Promise<FileItem> => {
