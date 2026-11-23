@@ -53,9 +53,9 @@ def cleanup_mock_data():
         db.query(Department).update({Department.used_storage_bytes: 0})
 
         # 3. Re-create the 3 clean default base folders
-        admin_user = db.query(User).filter_by(email="admin@abyssinia.et").first()
-        staff_user = db.query(User).filter_by(email="abebe@abyssinia.et").first()
-        org = db.query(Organization).filter_by(slug="abyssinia").first()
+        admin_user = db.query(User).filter_by(email="admin@abyssinia.et").first() or db.query(User).first()
+        staff_user = db.query(User).filter_by(email="abebe@abyssinia.et").first() or admin_user
+        org = db.query(Organization).filter_by(slug="abyssinia").first() or db.query(Organization).filter_by(slug="wine-technologies").first() or db.query(Organization).first()
         dept_hr = db.query(Department).filter_by(code="HR").first()
         dept_fin = db.query(Department).filter_by(code="FIN").first()
 
