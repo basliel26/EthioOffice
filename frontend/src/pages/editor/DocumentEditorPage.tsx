@@ -217,7 +217,7 @@ export const DocumentEditorPage: React.FC = () => {
 
   // 2. Euro-Office Offline DocsAPI Loader & Mount
   useEffect(() => {
-    if (activeEngine !== 'euro-office' || !docConfig) {
+    if (isLoading || activeEngine !== 'euro-office' || !docConfig) {
       return;
     }
 
@@ -237,6 +237,18 @@ export const DocumentEditorPage: React.FC = () => {
       setIsDocumentServerOnline(true);
       setEditorLoadError(null);
 
+      const container = document.getElementById('euro-office-mount-point');
+      if (!container) {
+        // If container isn't in DOM yet, retry on next frame
+        requestAnimationFrame(() => {
+          const retry = document.getElementById('euro-office-mount-point');
+          if (retry) {
+            initEditor();
+          }
+        });
+        return;
+      }
+
       if (editorInstanceRef.current && typeof editorInstanceRef.current.destroyEditor === 'function') {
         try {
           editorInstanceRef.current.destroyEditor();
@@ -247,8 +259,6 @@ export const DocumentEditorPage: React.FC = () => {
       }
 
       try {
-        const container = document.getElementById('euro-office-mount-point');
-        if (!container) return;
         container.innerHTML = '';
 
         const editorConfigWithEvents = {
@@ -356,7 +366,7 @@ export const DocumentEditorPage: React.FC = () => {
         editorInstanceRef.current = null;
       }
     };
-  }, [activeEngine, isDocumentServerOnline, docConfig]);
+  }, [isLoading, activeEngine, isDocumentServerOnline, docConfig]);
 
   // 3. Save handler for Euro-Office Suite & Native Canvas
   const handleSave = useCallback(
