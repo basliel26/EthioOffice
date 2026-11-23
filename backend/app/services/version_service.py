@@ -327,27 +327,56 @@ class VersionService:
             rel_storage_path = existing_version.storage_path
             is_deduplicated = True
 
-        # 5. Determine next version number
-        max_v = db.query(func.coalesce(func.max(FileVersion.version_number), 0)).filter(
-            FileVersion.file_id == file_item.id
-        ).scalar()
-        next_v = max_v + 1
+        # -------------------------------------------------------------
+        # [HALTED: Version History feature disabled - in-place update]
+        # To avoid saving multiple files/versions on disk, we update the
+        # existing version record and delete the previous payload.
+        # Original version history logic preserved below for future use:
+        # -------------------------------------------------------------
+        # max_v = db.query(func.coalesce(func.max(FileVersion.version_number), 0)).filter(
+        #     FileVersion.file_id == file_item.id
+        # ).scalar()
+        # next_v = max_v + 1
+        # summary = change_summary or f"Version {next_v}"
+        # if is_deduplicated:
+        #     summary = f"{summary} (CAS Deduplicated)"
+        # version = FileVersion(
+        #     file_id=file_item.id,
+        #     version_number=next_v,
+        #     storage_path=rel_storage_path,
+        #     checksum_sha256=sha256_checksum,
+        #     size_bytes=size_bytes,
+        #     created_by_id=actor.id,
+        #     change_summary=summary,
+        # )
+        # db.add(version)
+        # db.flush()
 
-        summary = change_summary or f"Version {next_v}"
-        if is_deduplicated:
-            summary = f"{summary} (CAS Deduplicated)"
-
-        version = FileVersion(
-            file_id=file_item.id,
-            version_number=next_v,
-            storage_path=rel_storage_path,
-            checksum_sha256=sha256_checksum,
-            size_bytes=size_bytes,
-            created_by_id=actor.id,
-            change_summary=summary,
-        )
-        db.add(version)
-        db.flush()
+        cur_version = file_item.current_version
+        if cur_version:
+            # Clean up old payload file on disk if storage path changed
+            if cur_version.storage_path != rel_storage_path and not is_deduplicated:
+                try:
+                    storage_provider.delete_payload(cur_version.storage_path)
+                except Exception:
+                    pass
+            cur_version.storage_path = rel_storage_path
+            cur_version.checksum_sha256 = sha256_checksum
+            cur_version.size_bytes = size_bytes
+            cur_version.change_summary = change_summary or "Updated document"
+            version = cur_version
+        else:
+            version = FileVersion(
+                file_id=file_item.id,
+                version_number=1,
+                storage_path=rel_storage_path,
+                checksum_sha256=sha256_checksum,
+                size_bytes=size_bytes,
+                created_by_id=actor.id,
+                change_summary=change_summary or "Initial version",
+            )
+            db.add(version)
+            db.flush()
 
         # 6. Update current version pointer and size on FileItem
         file_item.current_version_id = version.id
@@ -368,8 +397,8 @@ class VersionService:
             target_id=file_item.id,
             target_name=file_item.name,
             details={
-                "action": "NEW_VERSION",
-                "version_number": next_v,
+                "action": "SAVED_IN_PLACE",
+                "version_number": version.version_number,
                 "size_bytes": size_bytes,
                 "sha256": sha256_checksum,
                 "deduplicated": is_deduplicated,
@@ -401,11 +430,15 @@ class VersionService:
         if file_item.is_folder:
             raise VersionDomainError("አቃፊዎች የትርጉም ታሪክ (Version history) የላቸውም")
 
-        versions = db.query(FileVersion).filter(
-            FileVersion.file_id == file_item.id
-        ).order_by(FileVersion.version_number.desc()).all()
+        # [HALTED: Version History feature disabled - returns current version only]
+        # versions = db.query(FileVersion).filter(
+        #     FileVersion.file_id == file_item.id
+        # ).order_by(FileVersion.version_number.desc()).all()
+        # return [cls.to_version_summary(v) for v in versions]
 
-        return [cls.to_version_summary(v) for v in versions]
+        if file_item.current_version:
+            return [cls.to_version_summary(file_item.current_version)]
+        return []
 
     @classmethod
     def get_version_file_info(

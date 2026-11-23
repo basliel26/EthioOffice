@@ -340,6 +340,7 @@ export const FileDetailsPanel: React.FC<FileDetailsPanelProps> = ({
         >
           Details
         </button>
+        {/* [HALTED: Version History feature disabled for now]
         <button
           type="button"
           onClick={() => {
@@ -364,6 +365,7 @@ export const FileDetailsPanel: React.FC<FileDetailsPanelProps> = ({
             </span>
           )}
         </button>
+        */}
       </div>
 
       {/* Panel Body Content */}

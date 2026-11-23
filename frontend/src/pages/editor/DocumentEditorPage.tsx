@@ -6,14 +6,14 @@ import {
   LockOpen,
   Share2,
   Download,
-  History,
+  // History,
   Check,
   Loader2,
   AlertCircle,
   FileText,
   FileSpreadsheet,
   Presentation,
-  X,
+  // X,
   Sparkles,
   Save,
   Bold,
@@ -27,7 +27,7 @@ import {
   ListOrdered,
   Heading1,
   Heading2,
-  RotateCcw,
+  // RotateCcw,
   ShieldAlert,
   Monitor,
   RefreshCw,
@@ -41,7 +41,7 @@ import type {
   EuroOfficeConfigResponse,
   CoAuthorItem,
   FileItem,
-  FileVersionSummary,
+  // FileVersionSummary,
 } from '../../api/types';
 
 // Global declaration for Euro-Office DocsAPI
@@ -97,11 +97,11 @@ export const DocumentEditorPage: React.FC = () => {
   const [lockHolderName, setLockHolderName] = useState<string | null>(null);
   const [isLocking, setIsLocking] = useState(false);
 
-  // Version History Drawer State
-  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
-  const [versions, setVersions] = useState<FileVersionSummary[]>([]);
-  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
-  const [isReverting, setIsReverting] = useState(false);
+  // [HALTED: Version History Drawer State disabled for now]
+  // const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
+  // const [versions, setVersions] = useState<FileVersionSummary[]>([]);
+  // const [isLoadingVersions, setIsLoadingVersions] = useState(false);
+  // const [isReverting, setIsReverting] = useState(false);
 
   // Share Modal State
   const [showShareModal, setShowShareModal] = useState(false);
@@ -193,16 +193,16 @@ export const DocumentEditorPage: React.FC = () => {
       const isOfficeFormat = ['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'odt', 'ods', 'odp', 'rtf', 'txt'].includes(ext);
       setActiveEngine(isOfficeFormat ? 'euro-office' : 'native');
 
-      // Pre-fetch versions for history drawer
-      try {
-        setIsLoadingVersions(true);
-        const vers = await filesApi.listVersions(fileId);
-        setVersions(vers);
-      } catch {
-        setVersions([]);
-      } finally {
-        setIsLoadingVersions(false);
-      }
+      // [HALTED: Version History feature disabled for now]
+      // try {
+      //   setIsLoadingVersions(true);
+      //   const vers = await filesApi.listVersions(fileId);
+      //   setVersions(vers);
+      // } catch {
+      //   setVersions([]);
+      // } finally {
+      //   setIsLoadingVersions(false);
+      // }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to load document';
       setError(msg);
@@ -382,12 +382,13 @@ export const DocumentEditorPage: React.FC = () => {
           setSaveStatus('saved');
           setLastSavedTime(new Date());
           setHasUnsavedChanges(false);
-          try {
-            const freshVersions = await filesApi.listVersions(fileId);
-            setVersions(freshVersions);
-          } catch {
-            // ignore
-          }
+          // [HALTED: Version History feature disabled]
+          // try {
+          //   const freshVersions = await filesApi.listVersions(fileId);
+          //   setVersions(freshVersions);
+          // } catch {
+          //   // ignore
+          // }
         } catch (err) {
           console.warn('Euro-Office forcesave command response:', err);
           setSaveStatus('saved');
@@ -413,12 +414,13 @@ export const DocumentEditorPage: React.FC = () => {
         setSaveStatus('saved');
         setLastSavedTime(new Date());
 
-        try {
-          const freshVersions = await filesApi.listVersions(fileId);
-          setVersions(freshVersions);
-        } catch {
-          // ignore
-        }
+        // [HALTED: Version History feature disabled]
+        // try {
+        //   const freshVersions = await filesApi.listVersions(fileId);
+        //   setVersions(freshVersions);
+        // } catch {
+        //   // ignore
+        // }
       } catch (err: unknown) {
         setSaveStatus('error');
         if (!isAutoSave) {
@@ -506,33 +508,33 @@ export const DocumentEditorPage: React.FC = () => {
     }
   };
 
-  // Revert to historical version from inside the editor
-  const handleRevertVersion = async (versionNumber: number) => {
-    if (!fileId || isReverting) return;
-    setIsReverting(true);
-    try {
-      await filesApi.revertVersion(fileId, versionNumber);
-      const textData = await euroOfficeApi.getTextContent(fileId);
-      setContent(textData.content || '');
-      setOriginalContent(textData.content || '');
-      setHasUnsavedChanges(false);
-      setSaveStatus('saved');
-      const freshVersions = await filesApi.listVersions(fileId);
-      setVersions(freshVersions);
-      setShowHistoryDrawer(false);
-
-      // If in Euro-Office mode, reload document config
-      if (activeEngine === 'euro-office') {
-        const freshConfig = await euroOfficeApi.getConfig(fileId, 'en');
-        setDocConfig(freshConfig);
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Revert failed';
-      alert(`Rollback failed: ${msg}`);
-    } finally {
-      setIsReverting(false);
-    }
-  };
+  // [HALTED: Version History revert handler disabled for now]
+  // const handleRevertVersion = async (versionNumber: number) => {
+  //   if (!fileId || isReverting) return;
+  //   setIsReverting(true);
+  //   try {
+  //     await filesApi.revertVersion(fileId, versionNumber);
+  //     const textData = await euroOfficeApi.getTextContent(fileId);
+  //     setContent(textData.content || '');
+  //     setOriginalContent(textData.content || '');
+  //     setHasUnsavedChanges(false);
+  //     setSaveStatus('saved');
+  //     const freshVersions = await filesApi.listVersions(fileId);
+  //     setVersions(freshVersions);
+  //     setShowHistoryDrawer(false);
+  //
+  //     // If in Euro-Office mode, reload document config
+  //     if (activeEngine === 'euro-office') {
+  //       const freshConfig = await euroOfficeApi.getConfig(fileId, 'en');
+  //       setDocConfig(freshConfig);
+  //     }
+  //   } catch (err: unknown) {
+  //     const msg = err instanceof Error ? err.message : 'Revert failed';
+  //     alert(`Rollback failed: ${msg}`);
+  //   } finally {
+  //     setIsReverting(false);
+  //   }
+  // };
 
   // Retry probe for Euro-Office server
   const handleProbeServer = async () => {
@@ -811,7 +813,7 @@ export const DocumentEditorPage: React.FC = () => {
             </Button>
           )}
 
-          {/* History Drawer Toggle */}
+          {/* [HALTED: Version History feature disabled for now]
           <Button
             variant="subtle"
             size="sm"
@@ -827,6 +829,7 @@ export const DocumentEditorPage: React.FC = () => {
               </span>
             )}
           </Button>
+          */}
 
           {/* Share Button */}
           <Button
@@ -1069,8 +1072,10 @@ export const DocumentEditorPage: React.FC = () => {
             <div className="w-full max-w-[850px] py-3 px-2 flex items-center justify-between text-[11px] text-slate-400">
               <div className="flex items-center gap-3">
                 <span className="font-medium text-slate-500">{fileItem.name}</span>
+                {/* [HALTED: Version History feature disabled for now]
                 <span>•</span>
                 <span>CAS Version: v{versions[0]?.version_number || 1}</span>
+                */}
               </div>
               <div>
                 {content.length} characters • {content.trim().split(/\s+/).filter(Boolean).length} words
@@ -1078,7 +1083,7 @@ export const DocumentEditorPage: React.FC = () => {
             </div>
           </main>
 
-        {/* 5. In-Editor Revision History Slide-Out Drawer */}
+        {/* [HALTED: Version History feature disabled for now]
         {showHistoryDrawer && (
           <aside className="w-80 sm:w-88 lg:w-96 bg-white border-l border-slate-200/90 shadow-xl flex flex-col z-30 animate-fade-in shrink-0">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/60">
@@ -1177,6 +1182,7 @@ export const DocumentEditorPage: React.FC = () => {
             </div>
           </aside>
         )}
+        */}
       </div>
 
       {/* Share Modal */}
