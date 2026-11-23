@@ -48,10 +48,14 @@ export const LettersPage: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newLetter, setNewLetter] = useState({
     direction: 'INWARD' as 'INWARD' | 'OUTWARD' | 'INTERNAL_MEMO',
+    department_id: '',
     subject: '',
     sender_entity: '',
+    sender_contact: '',
     recipient_entity: '',
+    recipient_contact: '',
     reference_number: '',
+    external_reference_number: '',
     urgency: 'NORMAL',
     confidentiality: 'NORMAL',
     notes: '',
@@ -142,10 +146,14 @@ export const LettersPage: React.FC = () => {
     try {
       await lettersApi.create({
         direction: newLetter.direction,
+        department_id: newLetter.department_id || undefined,
         subject: newLetter.subject.trim(),
         sender_entity: newLetter.sender_entity.trim(),
+        sender_contact: newLetter.sender_contact.trim() || undefined,
         recipient_entity: newLetter.recipient_entity.trim(),
+        recipient_contact: newLetter.recipient_contact.trim() || undefined,
         reference_number: newLetter.reference_number.trim() || undefined,
+        external_reference_number: newLetter.external_reference_number.trim() || undefined,
         urgency: newLetter.urgency,
         confidentiality: newLetter.confidentiality,
         notes: newLetter.notes.trim() || undefined,
@@ -154,10 +162,14 @@ export const LettersPage: React.FC = () => {
       setShowCreateModal(false);
       setNewLetter({
         direction: 'INWARD',
+        department_id: '',
         subject: '',
         sender_entity: '',
+        sender_contact: '',
         recipient_entity: '',
+        recipient_contact: '',
         reference_number: '',
+        external_reference_number: '',
         urgency: 'NORMAL',
         confidentiality: 'NORMAL',
         notes: '',
@@ -565,95 +577,182 @@ export const LettersPage: React.FC = () => {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         title="አዲስ ደብዳቤ መዝግብ (Register Official Letter)"
-        maxWidth="lg"
+        maxWidth="xl"
       >
-        <form onSubmit={handleCreateSubmit} className="space-y-3.5">
-          <div className="grid grid-cols-3 gap-2 p-1 bg-zinc-100 rounded-lg text-xs font-medium">
+        <form onSubmit={handleCreateSubmit} className="space-y-4">
+          <div className="grid grid-cols-3 gap-2 p-1 bg-zinc-100/80 rounded-lg text-xs font-medium">
             <button
               type="button"
               onClick={() => setNewLetter({ ...newLetter, direction: 'INWARD' })}
-              className={`py-1.5 rounded-md transition-colors ${
-                newLetter.direction === 'INWARD' ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-600'
+              className={`py-1.5 rounded-md transition-colors flex items-center justify-center gap-1.5 ${
+                newLetter.direction === 'INWARD'
+                  ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
+                  : 'text-zinc-600'
               }`}
             >
+              <ArrowDownLeft className="w-3.5 h-3.5 text-blue-600" />
               ገቢ (Inward)
             </button>
             <button
               type="button"
               onClick={() => setNewLetter({ ...newLetter, direction: 'OUTWARD' })}
-              className={`py-1.5 rounded-md transition-colors ${
-                newLetter.direction === 'OUTWARD' ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-600'
+              className={`py-1.5 rounded-md transition-colors flex items-center justify-center gap-1.5 ${
+                newLetter.direction === 'OUTWARD'
+                  ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
+                  : 'text-zinc-600'
               }`}
             >
+              <ArrowUpRight className="w-3.5 h-3.5 text-emerald-600" />
               ወጪ (Outward)
             </button>
             <button
               type="button"
               onClick={() => setNewLetter({ ...newLetter, direction: 'INTERNAL_MEMO' })}
-              className={`py-1.5 rounded-md transition-colors ${
-                newLetter.direction === 'INTERNAL_MEMO' ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-600'
+              className={`py-1.5 rounded-md transition-colors flex items-center justify-center gap-1.5 ${
+                newLetter.direction === 'INTERNAL_MEMO'
+                  ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
+                  : 'text-zinc-600'
               }`}
             >
+              <FileText className="w-3.5 h-3.5 text-purple-600" />
               ማስታወሻ (Memo)
             </button>
           </div>
 
-          <Input
-            label="የደብዳቤው ርዕስ ወይም ጉዳይ (Subject)"
-            placeholder="የ2018 ዓ.ም የፋይናንስ ኦዲት ሪፖርት"
-            value={newLetter.subject}
-            onChange={(e) => setNewLetter({ ...newLetter, subject: e.target.value })}
-            required
-            autoFocus
-          />
-
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="ላኪ ተቋም / ክፍል (Sender)"
-              placeholder="የፋይናንስ ሚኒስቴር"
-              value={newLetter.sender_entity}
-              onChange={(e) => setNewLetter({ ...newLetter, sender_entity: e.target.value })}
-              required
-            />
-            <Input
-              label="ተቀባይ ተቋም / ክፍል (Recipient)"
-              placeholder="ዋና ስራ አስፈፃሚ"
-              value={newLetter.recipient_entity}
-              onChange={(e) => setNewLetter({ ...newLetter, recipient_entity: e.target.value })}
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <Input
+                label="የደብዳቤው ርዕስ ወይም ጉዳይ (Subject)"
+                placeholder="ለምሳሌ፡ የ2018 ዓ.ም የፋይናንስ ኦዲት ሪፖርት"
+                value={newLetter.subject}
+                onChange={(e) => setNewLetter({ ...newLetter, subject: e.target.value })}
+                required
+                autoFocus
+              />
+            </div>
             <div>
               <label className="block text-xs font-medium text-zinc-600 mb-1.5">
-                አስቸኳይነት (Urgency SLA)
+                የስራ ክፍል (Department)
+              </label>
+              <select
+                value={newLetter.department_id}
+                onChange={(e) => setNewLetter({ ...newLetter, department_id: e.target.value })}
+                className="w-full rounded-lg bg-zinc-50/80 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+              >
+                <option value="">ጠቅላላ መዝገብ ቤት (Org Wide)</option>
+                {departments.map((dept) => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name} ({dept.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Input
+                label="ላኪ ተቋም / ክፍል (Sender Entity)"
+                placeholder="ለምሳሌ፡ የገንዘብ ሚኒስቴር ወይም ዳይሬክቶሬት"
+                value={newLetter.sender_entity}
+                onChange={(e) => setNewLetter({ ...newLetter, sender_entity: e.target.value })}
+                required
+              />
+              <Input
+                label="የላኪ አድራሻ / ስልክ (Sender Contact)"
+                placeholder="ስልክ ወይም ኢሜይል (አማራጭ)"
+                value={newLetter.sender_contact}
+                onChange={(e) => setNewLetter({ ...newLetter, sender_contact: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Input
+                label="ተቀባይ ተቋም / ክፍል (Recipient Entity)"
+                placeholder="ለምሳሌ፡ ዋና ስራ አስፈፃሚ ወይም የሰው ኃይል"
+                value={newLetter.recipient_entity}
+                onChange={(e) => setNewLetter({ ...newLetter, recipient_entity: e.target.value })}
+                required
+              />
+              <Input
+                label="የተቀባይ አድራሻ / ስልክ (Recipient Contact)"
+                placeholder="ስልክ ወይም ኢሜይል (አማራጭ)"
+                value={newLetter.recipient_contact}
+                onChange={(e) => setNewLetter({ ...newLetter, recipient_contact: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-zinc-600 mb-1.5">
+                አስቸኳይነት (Urgency & SLA)
               </label>
               <select
                 value={newLetter.urgency}
                 onChange={(e) => setNewLetter({ ...newLetter, urgency: e.target.value })}
                 className="w-full rounded-lg bg-zinc-50/80 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
               >
-                <option value="NORMAL">መደበኛ - 5 የስራ ቀናት (Normal)</option>
-                <option value="URGENT">አስቸኳይ - 3 የስራ ቀናት (Urgent)</option>
-                <option value="VERY_URGENT">በጣም አስቸኳይ - 24 ሰዓት (Very Urgent)</option>
+                <option value="NORMAL">መደበኛ - 5 የስራ ቀናት (Normal - 5 Days SLA)</option>
+                <option value="URGENT">አስቸኳይ - 3 የስራ ቀናት (Urgent - 3 Days SLA)</option>
+                <option value="VERY_URGENT">በጣም አስቸኳይ - 24 ሰዓት (Very Urgent - 24h SLA)</option>
               </select>
             </div>
 
+            <div>
+              <label className="block text-xs font-medium text-zinc-600 mb-1.5">
+                የደህንነት ደረጃ (Confidentiality)
+              </label>
+              <select
+                value={newLetter.confidentiality}
+                onChange={(e) => setNewLetter({ ...newLetter, confidentiality: e.target.value })}
+                className="w-full rounded-lg bg-zinc-50/80 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+              >
+                <option value="NORMAL">መደበኛ (Standard / Public)</option>
+                <option value="CONFIDENTIAL">ሚስጥራዊ (Confidential)</option>
+                <option value="STRICTLY_CONFIDENTIAL">በጣም ሚስጥራዊ (Strictly Confidential)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
-              label="የደብዳቤ ቁጥር (ከተፈለገ በራስ-ሰር ይዘጋጃል)"
-              placeholder="አቢሲ/ፋይን/2018/001"
+              label={
+                newLetter.direction === 'INWARD'
+                  ? 'የውስጥ መዝገብ ቁጥር (ከተፈለገ በራስ-ሰር ይዘጋጃል)'
+                  : 'የደብዳቤ ቁጥር (ከተፈለገ በራስ-ሰር ይዘጋጃል)'
+              }
+              placeholder="ለምሳሌ፡ EO/FIN/2018/0042"
               value={newLetter.reference_number}
               onChange={(e) => setNewLetter({ ...newLetter, reference_number: e.target.value })}
             />
+
+            {newLetter.direction === 'INWARD' ? (
+              <Input
+                label="የላኪው ተቋም ደብዳቤ ቁጥር (External Ref Number)"
+                placeholder="ለምሳሌ፡ ገ/ሚ/04-2018"
+                value={newLetter.external_reference_number}
+                onChange={(e) =>
+                  setNewLetter({ ...newLetter, external_reference_number: e.target.value })
+                }
+              />
+            ) : (
+              <Input
+                label="ተጨማሪ ማስታወሻ (Notes)"
+                placeholder="ተያያዥ ማብራሪያ ካለ..."
+                value={newLetter.notes}
+                onChange={(e) => setNewLetter({ ...newLetter, notes: e.target.value })}
+              />
+            )}
           </div>
 
-          <Input
-            label="ተጨማሪ ማስታወሻ (Notes)"
-            placeholder="ተያያዥ ማብራሪያ ካለ..."
-            value={newLetter.notes}
-            onChange={(e) => setNewLetter({ ...newLetter, notes: e.target.value })}
-          />
+          {newLetter.direction === 'INWARD' && (
+            <Input
+              label="ተጨማሪ ማስታወሻ (Notes)"
+              placeholder="ተያያዥ ማብራሪያ ካለ..."
+              value={newLetter.notes}
+              onChange={(e) => setNewLetter({ ...newLetter, notes: e.target.value })}
+            />
+          )}
 
           <div className="flex justify-end gap-2 pt-3 border-t border-zinc-100">
             <Button variant="ghost" type="button" onClick={() => setShowCreateModal(false)}>
