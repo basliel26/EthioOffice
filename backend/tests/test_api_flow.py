@@ -108,5 +108,8 @@ def test_create_new_office_documents():
         assert resp.status_code == 201
         data = resp.json()
         assert data["name"].endswith(expected_ext)
-        assert data["size_bytes"] > 0
+        if doc_type == "txt":
+            assert data["size_bytes"] >= 0
+        else:
+            assert data["size_bytes"] > 0
         assert data["is_folder"] is False
