@@ -196,7 +196,7 @@ export interface LetterRecord {
   status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'DISPATCHED' | 'RECEIVED' | 'ARCHIVED';
   confidentiality: 'NORMAL' | 'CONFIDENTIAL' | 'STRICTLY_CONFIDENTIAL';
   urgency: 'NORMAL' | 'URGENT' | 'VERY_URGENT';
-  delivery_method?: string;
+  delivery_method?: 'HAND_DELIVERY' | 'POSTAL' | 'COURIER' | 'ELECTRONIC_EMAIL' | 'INTERNAL_DISPATCH' | string;
   subject: string;
   sender_entity: string;
   sender_contact?: string;
@@ -211,10 +211,19 @@ export interface LetterRecord {
   is_overdue: boolean;
   days_remaining?: number;
   approved_at_gc?: string;
+  approved_by_id?: string;
+  rejected_at_gc?: string;
+  rejected_by_id?: string;
   rejection_reason?: string;
+  dispatched_at_gc?: string;
+  dispatched_at_ec?: string;
+  dispatched_by_id?: string;
   attachment_file_id?: string;
   attachment_filename?: string;
+  reply_to_letter_id?: string;
   notes?: string;
+  created_by_id?: string;
+  assigned_to_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -223,6 +232,35 @@ export interface LetterDetail extends LetterRecord {
   routings: LetterRoutingItem[];
   attachments: LetterAttachment[];
   reply_count: number;
+}
+
+export interface LetterAnalyticsSummary {
+  total_letters: number;
+  inward_count: number;
+  outward_count: number;
+  memo_count: number;
+  pending_approval_count: number;
+  dispatched_count: number;
+  received_count: number;
+  archived_count: number;
+  urgent_open_count: number;
+  overdue_sla_count: number;
+  confidential_count: number;
+  by_department: Record<string, number>;
+  by_urgency: Record<string, number>;
+}
+
+export interface DepartmentItem {
+  id: string;
+  name: string;
+  code: string;
+  description?: string;
+  parent_id?: string;
+  member_count: number;
+  subdepartment_count: number;
+  storage_quota_bytes?: number;
+  used_storage_bytes: number;
+  storage_quota_gb?: number;
 }
 
 export interface AuditLogItem {

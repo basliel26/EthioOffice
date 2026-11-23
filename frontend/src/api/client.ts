@@ -12,6 +12,10 @@ import type {
   NotificationItem,
   LetterRecord,
   LetterDetail,
+  LetterRoutingItem,
+  LetterAttachment,
+  LetterAnalyticsSummary,
+  DepartmentItem,
   AuditLogItem,
   AuditLedgerVerification,
   StorageAnalytics,
@@ -311,19 +315,33 @@ export const notificationsApi = {
 // 6. Letter Registry (የደብዳቤ መዝገብ) API
 // -------------------------------------------------------------
 export const lettersApi = {
+  getAnalyticsSummary: async (): Promise<LetterAnalyticsSummary> => {
+    const res = await api.get<LetterAnalyticsSummary>('/letters/analytics/summary');
+    return res.data;
+  },
   list: async (params?: {
     direction?: string;
     status?: string;
     confidentiality?: string;
     urgency?: string;
+    department_id?: string;
+    ethiopian_year?: number;
     search?: string;
+    is_overdue?: boolean;
+    limit?: number;
+    offset?: number;
   }): Promise<LetterRecord[]> => {
     const query = new URLSearchParams();
     if (params?.direction) query.append('direction', params.direction);
     if (params?.status) query.append('status', params.status);
     if (params?.confidentiality) query.append('confidentiality', params.confidentiality);
     if (params?.urgency) query.append('urgency', params.urgency);
+    if (params?.department_id) query.append('department_id', params.department_id);
+    if (params?.ethiopian_year) query.append('ethiopian_year', String(params.ethiopian_year));
     if (params?.search) query.append('search', params.search);
+    if (params?.is_overdue !== undefined) query.append('is_overdue', String(params.is_overdue));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.offset) query.append('offset', String(params.offset));
     const res = await api.get<LetterRecord[]>(`/letters?${query.toString()}`);
     return res.data;
   },
@@ -333,31 +351,90 @@ export const lettersApi = {
   },
   create: async (data: {
     direction: 'INWARD' | 'OUTWARD' | 'INTERNAL_MEMO';
+    department_id?: string;
     subject: string;
     sender_entity: string;
+    sender_contact?: string;
     recipient_entity: string;
-    reference_number?: string;
+    recipient_contact?: string;
+    cc_entities?: string[];
     confidentiality?: string;
     urgency?: string;
+    delivery_method?: string;
+    reference_number?: string;
+    external_reference_number?: string;
+    date_gc?: string;
+    attachment_file_id?: string;
+    reply_to_letter_id?: string;
     notes?: string;
+    assigned_to_id?: string;
   }): Promise<LetterRecord> => {
     const res = await api.post<LetterRecord>('/letters', data);
     return res.data;
   },
+  update: async (id: string, data: Partial<{
+    subject: string;
+    sender_entity: string;
+    sender_contact?: string;
+    recipient_entity: string;
+    recipient_contact?: string;
+    cc_entities?: string[];
+    confidentiality: string;
+    urgency: string;
+    delivery_method?: string;
+    attachment_file_id?: string;
+    notes?: string;
+    assigned_to_id?: string;
+  }>): Promise<LetterRecord> => {
+    const res = await api.patch<LetterRecord>(`/letters/${id}`, data);
+    return res.data;
+  },
+  submit: async (id: string): Promise<LetterDetail> => {
+    const res = await api.post<LetterDetail>(`/letters/${id}/submit`);
+    return res.data;
+  },
   approve: async (id: string): Promise<LetterDetail> => {
-    const res = await api.post<LetterDetail>(`/letters/${id}/approve`, { action: 'APPROVE' });
+    const res = await api.post<LetterDetail>(`/letters/${id}/approve`);
     return res.data;
   },
   reject: async (id: string, reason: string): Promise<LetterDetail> => {
-    const res = await api.post<LetterDetail>(`/letters/${id}/approve`, { action: 'REJECT', rejection_reason: reason });
+    const res = await api.post<LetterDetail>(`/letters/${id}/reject`, {
+      action: 'REJECT',
+      rejection_reason: reason,
+    });
     return res.data;
   },
-  route: async (id: string, data: { to_department_id: string; to_user_id?: string; action_required: string; instructions?: string }): Promise<unknown> => {
-    const res = await api.post(`/letters/${id}/route`, data);
+  dispatch: async (id: string, data?: {
+    delivery_method?: string;
+    dispatched_date_gc?: string;
+  }): Promise<LetterDetail> => {
+    const res = await api.post<LetterDetail>(`/letters/${id}/dispatch`, data || {});
     return res.data;
   },
-  attachFile: async (letterId: string, fileId: string, attachmentType: string = 'SUPPORTING_DOCUMENT', notes?: string): Promise<unknown> => {
-    const res = await api.post(`/letters/${letterId}/attachments`, {
+  route: async (id: string, data: {
+    to_department_id: string;
+    to_user_id?: string;
+    action_required: string;
+    priority?: string;
+    instructions?: string;
+  }): Promise<LetterRoutingItem> => {
+    const res = await api.post<LetterRoutingItem>(`/letters/${id}/route`, data);
+    return res.data;
+  },
+  acknowledgeRouting: async (routingId: string): Promise<LetterRoutingItem> => {
+    const res = await api.patch<LetterRoutingItem>(`/letters/routings/${routingId}/acknowledge`);
+    return res.data;
+  },
+  completeRouting: async (routingId: string, data: { response_notes: string }): Promise<LetterRoutingItem> => {
+    const res = await api.patch<LetterRoutingItem>(`/letters/routings/${routingId}/complete`, data);
+    return res.data;
+  },
+  archive: async (id: string): Promise<LetterDetail> => {
+    const res = await api.post<LetterDetail>(`/letters/${id}/archive`);
+    return res.data;
+  },
+  attachFile: async (letterId: string, fileId: string, attachmentType: string = 'SUPPORTING_DOCUMENT', notes?: string): Promise<LetterAttachment> => {
+    const res = await api.post<LetterAttachment>(`/letters/${letterId}/attachments`, {
       file_id: fileId,
       attachment_type: attachmentType,
       notes,
@@ -366,10 +443,6 @@ export const lettersApi = {
   },
   deleteAttachment: async (letterId: string, attachmentId: string): Promise<{ message: string }> => {
     const res = await api.delete<{ message: string }>(`/letters/${letterId}/attachments/${attachmentId}`);
-    return res.data;
-  },
-  archive: async (id: string): Promise<unknown> => {
-    const res = await api.post(`/letters/${id}/archive`);
     return res.data;
   },
 };
@@ -536,6 +609,16 @@ export const publicApi = {
 export const systemApi = {
   getContext: async (): Promise<SystemContext> => {
     const res = await api.get<SystemContext>('/system/context');
+    return res.data;
+  },
+};
+
+// -------------------------------------------------------------
+// 13. Organizational Departments API
+// -------------------------------------------------------------
+export const departmentsApi = {
+  list: async (): Promise<DepartmentItem[]> => {
+    const res = await api.get<DepartmentItem[]>('/departments');
     return res.data;
   },
 };
