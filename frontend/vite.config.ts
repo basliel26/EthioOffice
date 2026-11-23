@@ -12,11 +12,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://10.18.113.252:8001',
+        target: 'http://127.0.0.1:8001',
         changeOrigin: true,
       },
       '/euro-office-server': {
-        target: 'http://localhost:80',
+        target: 'http://127.0.0.1:80',
         changeOrigin: true,
         ws: true,
         rewrite: (path) => path.replace(/^\/euro-office-server/, ''),
