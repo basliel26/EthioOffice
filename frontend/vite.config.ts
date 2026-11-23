@@ -16,7 +16,7 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/euro-office-server': {
-        target: 'http://10.18.113.13',
+        target: 'http://localhost:80',
         changeOrigin: true,
         ws: true,
         rewrite: (path) => path.replace(/^\/euro-office-server/, ''),

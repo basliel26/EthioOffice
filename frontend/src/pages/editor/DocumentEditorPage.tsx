@@ -224,7 +224,7 @@ export const DocumentEditorPage: React.FC = () => {
     const scriptId = 'euro-office-api-script';
     const configuredServer = docConfig.server_url && !docConfig.server_url.includes('localhost:8080')
       ? docConfig.server_url
-      : 'http://10.18.113.13';
+      : 'http://localhost:80';
     const serverUrl = configuredServer.replace(/:80(?=\/|$)/, '').replace(/\/+$/, '');
     const directScriptUrl = `${serverUrl}/web-apps/apps/api/documents/api.js`;
     const proxiedScriptUrl = `/euro-office-server/web-apps/apps/api/documents/api.js`;

@@ -17,12 +17,12 @@ import urllib.error
 
 ENV_PATH = Path(__file__).resolve().parent / ".env"
 
-# Allow passing EuroOffice IP as command line argument (default: 10.18.113.13)
-euro_office_ip = sys.argv[1].strip() if len(sys.argv) > 1 else "10.18.113.13"
-if not euro_office_ip.startswith("http"):
-    euro_office_url = f"http://{euro_office_ip}"
+# Allow passing EuroOffice URL/IP as command line argument (default: http://localhost:80)
+euro_office_arg = sys.argv[1].strip() if len(sys.argv) > 1 else "http://localhost:80"
+if not euro_office_arg.startswith("http"):
+    euro_office_url = f"http://{euro_office_arg}"
 else:
-    euro_office_url = euro_office_ip
+    euro_office_url = euro_office_arg
 
 DEFAULT_SETTINGS = {
     "PROJECT_NAME": '"EthioOffice API"',
@@ -30,7 +30,7 @@ DEFAULT_SETTINGS = {
     "SECRET_KEY": '"ethiooffice-secure-jwt-key-2026-production-ready"',
     "ACCESS_TOKEN_EXPIRE_MINUTES": "1440",
     "EURO_OFFICE_URL": f'"{euro_office_url}"',
-    "EURO_OFFICE_JWT_SECRET": '"nkuJcQeu3y7pPg4UaJLonFkoHtVeQyDT"',
+    "EURO_OFFICE_JWT_SECRET": '"euro-office-secret-change-in-production"',
     "BACKEND_INTERNAL_URL": '"http://10.18.113.252:8001"',
 }
 
@@ -70,7 +70,7 @@ def update_env():
     
     print(f"      [OK] Saved configuration to {ENV_PATH}")
     print(f"           EURO_OFFICE_URL = {euro_office_url}")
-    print(f"           EURO_OFFICE_JWT_SECRET = nkuJcQeu3y7pPg4UaJLonFkoHtVeQyDT")
+    print(f"           EURO_OFFICE_JWT_SECRET = euro-office-secret-change-in-production")
     print(f"           BACKEND_INTERNAL_URL = http://10.18.113.252:8001")
 
 
