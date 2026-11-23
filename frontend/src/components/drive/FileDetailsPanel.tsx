@@ -25,6 +25,8 @@ import {
   Layers,
   ChevronRight,
   Info,
+  Package,
+  Archive,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
@@ -149,6 +151,24 @@ export const FileDetailsPanel: React.FC<FileDetailsPanelProps> = ({
         return <FileText className={`${sizeClass} text-red-600`} />;
       case 'txt':
         return <FileText className={`${sizeClass} text-slate-600`} />;
+      case 'exe':
+      case 'msi':
+      case 'dmg':
+      case 'pkg':
+      case 'deb':
+      case 'rpm':
+      case 'apk':
+      case 'appimage':
+      case 'iso':
+      case 'bin':
+        return <Package className={`${sizeClass} text-indigo-600`} />;
+      case 'zip':
+      case 'tar':
+      case 'gz':
+      case 'tgz':
+      case '7z':
+      case 'rar':
+        return <Archive className={`${sizeClass} text-amber-600`} />;
       default:
         return <FileIcon className={`${sizeClass} text-slate-500`} />;
     }
@@ -174,6 +194,34 @@ export const FileDetailsPanel: React.FC<FileDetailsPanelProps> = ({
         return 'PDF Document (.pdf)';
       case 'txt':
         return 'Plain Text Document (.txt)';
+      case 'exe':
+        return 'Windows Executable Setup (.exe)';
+      case 'msi':
+        return 'Windows Installer Package (.msi)';
+      case 'dmg':
+        return 'macOS Disk Image (.dmg)';
+      case 'pkg':
+        return 'Apple Installer Package (.pkg)';
+      case 'deb':
+        return 'Debian / Ubuntu Package (.deb)';
+      case 'rpm':
+        return 'Red Hat / Fedora Package (.rpm)';
+      case 'apk':
+        return 'Android Package (.apk)';
+      case 'appimage':
+        return 'Linux AppImage (.appimage)';
+      case 'iso':
+        return 'Disk Image / ISO (.iso)';
+      case 'zip':
+        return 'ZIP Compressed Archive (.zip)';
+      case 'tar':
+      case 'gz':
+      case 'tgz':
+        return 'Tarball Archive (.tar.gz)';
+      case '7z':
+        return '7-Zip Compressed Archive (.7z)';
+      case 'rar':
+        return 'RAR Compressed Archive (.rar)';
       default:
         return `${ext?.toUpperCase() || 'Binary'} File`;
     }
@@ -447,9 +495,9 @@ export const FileDetailsPanel: React.FC<FileDetailsPanelProps> = ({
 
                 {!item.is_folder && (
                   <Button
-                    variant="secondary"
+                    variant={isEditableOfficeDoc(item.name) ? 'secondary' : 'primary'}
                     size="sm"
-                    className="text-[11px]"
+                    className={`text-[11px] ${!isEditableOfficeDoc(item.name) ? 'flex-1' : ''}`}
                     isLoading={isDownloading}
                     leftIcon={<Download className="w-3.5 h-3.5" />}
                     onClick={handleDownloadCurrent}

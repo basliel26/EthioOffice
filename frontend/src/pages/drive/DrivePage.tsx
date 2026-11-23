@@ -27,6 +27,8 @@ import {
   Filter,
   X,
   Info,
+  Package,
+  Archive,
 } from 'lucide-react';
 import { filesApi, tagsApi, sharesApi } from '../../api/client';
 import { useSearchScope } from '../../context/SearchContext';
@@ -151,7 +153,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
   const [activeRowMenuId, setActiveRowMenuId] = useState<string | null>(null);
 
   // Filter & Layout State
-  type TypeFilter = 'ALL' | 'FOLDERS' | 'DOCX' | 'XLSX' | 'PPTX' | 'TXT' | 'PDF';
+  type TypeFilter = 'ALL' | 'FOLDERS' | 'DOCX' | 'XLSX' | 'PPTX' | 'TXT' | 'PDF' | 'SOFTWARE';
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<TypeFilter>('ALL');
   const [showTagFilterMenu, setShowTagFilterMenu] = useState(false);
   const [showTypeFilterMenu, setShowTypeFilterMenu] = useState(false);
@@ -558,6 +560,21 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
+  const isOfficeDocument = (filename?: string): boolean => {
+    if (!filename) return false;
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    return ['docx', 'doc', 'xlsx', 'xls', 'csv', 'pptx', 'ppt', 'odt', 'ods', 'odp', 'rtf', 'txt'].includes(ext);
+  };
+
+  const isSoftwareOrArchive = (filename?: string): boolean => {
+    if (!filename) return false;
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    return [
+      'exe', 'msi', 'dmg', 'pkg', 'deb', 'rpm', 'apk', 'appimage',
+      'iso', 'img', 'zip', 'tar', 'gz', 'tgz', '7z', 'rar', 'bin', 'dll'
+    ].includes(ext);
+  };
+
   const getFileIcon = (file: FileItem, sizeClass: string = 'w-5 h-5') => {
     if (file.is_folder) {
       return <Folder className={`${sizeClass} text-blue-600 fill-blue-50/70 shrink-0`} />;
@@ -578,6 +595,32 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     if (name.endsWith('.txt')) {
       return <FileText className={`${sizeClass} text-slate-500 shrink-0`} />;
     }
+    // Software setups, applications, installers
+    if (
+      name.endsWith('.exe') ||
+      name.endsWith('.msi') ||
+      name.endsWith('.dmg') ||
+      name.endsWith('.pkg') ||
+      name.endsWith('.deb') ||
+      name.endsWith('.rpm') ||
+      name.endsWith('.apk') ||
+      name.endsWith('.appimage') ||
+      name.endsWith('.iso') ||
+      name.endsWith('.bin')
+    ) {
+      return <Package className={`${sizeClass} text-indigo-600 fill-indigo-50/70 shrink-0`} />;
+    }
+    // Archives & Compressed Packages
+    if (
+      name.endsWith('.zip') ||
+      name.endsWith('.tar') ||
+      name.endsWith('.gz') ||
+      name.endsWith('.tgz') ||
+      name.endsWith('.7z') ||
+      name.endsWith('.rar')
+    ) {
+      return <Archive className={`${sizeClass} text-amber-600 shrink-0`} />;
+    }
     return <FileText className={`${sizeClass} text-slate-400 shrink-0`} />;
   };
 
@@ -595,6 +638,8 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
         return 'Text (.txt)';
       case 'PDF':
         return 'PDF (.pdf)';
+      case 'SOFTWARE':
+        return 'Software & Setups (.exe, .msi, etc.)';
       case 'ALL':
       default:
         return 'All Types';
@@ -609,6 +654,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     { id: 'PPTX' as const, label: 'Presentations (.pptx)', icon: <Presentation className="w-3.5 h-3.5 text-amber-600" /> },
     { id: 'TXT' as const, label: 'Text Notes (.txt)', icon: <FileText className="w-3.5 h-3.5 text-slate-500" /> },
     { id: 'PDF' as const, label: 'PDF Documents (.pdf)', icon: <FileText className="w-3.5 h-3.5 text-rose-600" /> },
+    { id: 'SOFTWARE' as const, label: 'Software & Setups (.exe, .msi, etc.)', icon: <Package className="w-3.5 h-3.5 text-indigo-600" /> },
   ];
 
   const filteredFiles = files.filter((f) => {
@@ -632,6 +678,9 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
     }
     if (selectedTypeFilter === 'PDF') {
       return !f.is_folder && f.name.toLowerCase().endsWith('.pdf');
+    }
+    if (selectedTypeFilter === 'SOFTWARE') {
+      return !f.is_folder && isSoftwareOrArchive(f.name);
     }
     return true;
   });
@@ -673,22 +722,51 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
 
     return (
       <>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setActiveRowMenuId(null);
-            if (file.is_folder) {
+        {file.is_folder ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveRowMenuId(null);
               handleOpenFolder(file);
-            } else {
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer text-left"
+          >
+            <ExternalLink className="w-4 h-4 text-slate-500 shrink-0" />
+            <span>Open Folder</span>
+          </button>
+        ) : isOfficeDocument(file.name) ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveRowMenuId(null);
               navigate(`/editor/${file.id}`);
-            }
-          }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer text-left"
-        >
-          <ExternalLink className="w-4 h-4 text-slate-500 shrink-0" />
-          <span>{file.is_folder ? 'Open Folder' : 'Open in Editor'}</span>
-        </button>
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer text-left"
+          >
+            <ExternalLink className="w-4 h-4 text-slate-500 shrink-0" />
+            <span>Open in Editor</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={async (e) => {
+              e.stopPropagation();
+              setActiveRowMenuId(null);
+              try {
+                await filesApi.downloadFile(file.id, file.name);
+              } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : 'Download failed';
+                alert(`Could not download file: ${msg}`);
+              }
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50/60 text-xs font-semibold text-blue-700 transition-colors cursor-pointer text-left"
+          >
+            <Download className="w-4 h-4 text-blue-600 shrink-0" />
+            <span>{isSoftwareOrArchive(file.name) ? 'Download Application / Setup' : 'Download File'}</span>
+          </button>
+        )}
 
         <button
           type="button"
@@ -705,7 +783,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
           <span>Details & Inspector</span>
         </button>
 
-        {!file.is_folder && (
+        {!file.is_folder && isOfficeDocument(file.name) && (
           <button
             type="button"
             onClick={async (e) => {
@@ -1150,8 +1228,10 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                   onDoubleClick={() => {
                     if (file.is_folder) {
                       handleOpenFolder(file);
-                    } else {
+                    } else if (isOfficeDocument(file.name)) {
                       navigate(`/editor/${file.id}`);
+                    } else {
+                      filesApi.downloadFile(file.id, file.name);
                     }
                   }}
                   className={`group relative flex flex-col justify-between p-3.5 rounded-2xl border transition-all cursor-pointer select-none ${
@@ -1276,8 +1356,10 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                   onDoubleClick={() => {
                     if (file.is_folder) {
                       handleOpenFolder(file);
-                    } else {
+                    } else if (isOfficeDocument(file.name)) {
                       navigate(`/editor/${file.id}`);
+                    } else {
+                      filesApi.downloadFile(file.id, file.name);
                     }
                   }}
                   className={`flex items-center justify-between p-3 sm:px-4 rounded-xl border transition-all group cursor-pointer ${
@@ -1792,22 +1874,51 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
             </>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={() => {
-                  const f = rowContextMenu.file;
-                  setRowContextMenu(null);
-                  if (f.is_folder) {
+              {rowContextMenu.file.is_folder ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const f = rowContextMenu.file;
+                    setRowContextMenu(null);
                     handleOpenFolder(f);
-                  } else {
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+                >
+                  <ExternalLink className="w-4 h-4 text-slate-500 shrink-0" />
+                  <span>Open Folder</span>
+                </button>
+              ) : isOfficeDocument(rowContextMenu.file.name) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const f = rowContextMenu.file;
+                    setRowContextMenu(null);
                     navigate(`/editor/${f.id}`);
-                  }
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
-              >
-                <ExternalLink className="w-4 h-4 text-slate-500 shrink-0" />
-                <span>{rowContextMenu.file.is_folder ? 'Open Folder' : 'Open in Editor'}</span>
-              </button>
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 text-xs font-medium text-slate-800 hover:text-blue-600 transition-colors cursor-pointer"
+                >
+                  <ExternalLink className="w-4 h-4 text-slate-500 shrink-0" />
+                  <span>Open in Editor</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const f = rowContextMenu.file;
+                    setRowContextMenu(null);
+                    try {
+                      await filesApi.downloadFile(f.id, f.name);
+                    } catch (err: unknown) {
+                      const msg = err instanceof Error ? err.message : 'Download failed';
+                      alert(`Could not download file: ${msg}`);
+                    }
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50/60 text-xs font-semibold text-blue-700 transition-colors cursor-pointer text-left"
+                >
+                  <Download className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>{isSoftwareOrArchive(rowContextMenu.file.name) ? 'Download Application / Setup' : 'Download File'}</span>
+                </button>
+              )}
 
               <button
                 type="button"
@@ -1824,7 +1935,7 @@ export const DrivePage: React.FC<DrivePageProps> = ({ viewMode = 'PERSONAL' }) =
                 <span>Details Inspector</span>
               </button>
 
-              {!rowContextMenu.file.is_folder && (
+              {!rowContextMenu.file.is_folder && isOfficeDocument(rowContextMenu.file.name) && (
                 <button
                   type="button"
                   onClick={async () => {

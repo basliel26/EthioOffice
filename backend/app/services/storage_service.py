@@ -85,11 +85,12 @@ class FileLockedError(StorageDomainError):
 
 # =====================================================================
 # Enterprise File Security & Sanitization
-# =====================================================================
-
+# Allows software setups, application installers (.exe, .msi, .dmg, .pkg, .deb, .rpm, .apk, .iso, .zip),
+# while blocking raw dangerous script/macro execution payloads.
 DANGEROUS_EXTENSIONS = {
-    ".exe", ".bat", ".cmd", ".sh", ".bash", ".vbs", ".ps1", ".scr",
-    ".dll", ".msi", ".com", ".pif", ".hta", ".cpl", ".wsf", ".vbe", ".reg"
+    ".bat", ".cmd", ".sh", ".bash", ".vbs", ".ps1", ".scr",
+    ".com", ".pif", ".hta", ".cpl", ".wsf", ".vbe", ".reg",
+    ".php", ".jsp", ".asp", ".aspx"
 }
 
 

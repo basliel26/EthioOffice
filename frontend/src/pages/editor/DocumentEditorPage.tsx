@@ -32,6 +32,7 @@ import {
   // Monitor,
   // RefreshCw,
   Pencil,
+  Package,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -137,6 +138,12 @@ export const DocumentEditorPage: React.FC = () => {
     }
   };
 
+  const isOfficeDocument = (filename?: string): boolean => {
+    if (!filename) return false;
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    return ['docx', 'doc', 'xlsx', 'xls', 'csv', 'pptx', 'ppt', 'odt', 'ods', 'odp', 'rtf', 'txt'].includes(ext);
+  };
+
   // 1. Load document data and configuration
   const loadDocument = useCallback(async () => {
     if (!fileId) return;
@@ -148,12 +155,17 @@ export const DocumentEditorPage: React.FC = () => {
       const file = await filesApi.get(fileId);
       setFileItem(file);
 
-      // Fetch Euro-Office Document Server configuration
-      try {
-        const cfg = await euroOfficeApi.getConfig(fileId, 'en');
-        setDocConfig(cfg);
-      } catch (e) {
-        console.warn('Euro-Office config error', e);
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      const isOfficeFormat = ['docx', 'doc', 'xlsx', 'xls', 'csv', 'pptx', 'ppt', 'odt', 'ods', 'odp', 'rtf', 'txt'].includes(ext);
+
+      // Fetch Euro-Office Document Server configuration ONLY for supported office documents
+      if (isOfficeFormat) {
+        try {
+          const cfg = await euroOfficeApi.getConfig(fileId, 'en');
+          setDocConfig(cfg);
+        } catch (e) {
+          console.warn('Euro-Office config error', e);
+        }
       }
 
       // Check lock status
@@ -168,36 +180,40 @@ export const DocumentEditorPage: React.FC = () => {
         setLockHolderName(null);
       }
 
-      // Fetch document text content for native canvas fallback
-      try {
-        const textData = await euroOfficeApi.getTextContent(fileId);
-        setContent(textData.content || '');
-        setOriginalContent(textData.content || '');
-        setSaveStatus('saved');
-      } catch {
-        setContent('');
-        setOriginalContent('');
+      // Fetch document text content for native canvas fallback (office files only)
+      if (isOfficeFormat) {
+        try {
+          const textData = await euroOfficeApi.getTextContent(fileId);
+          setContent(textData.content || '');
+          setOriginalContent(textData.content || '');
+          setSaveStatus('saved');
+        } catch {
+          setContent('');
+          setOriginalContent('');
+        }
       }
 
-      // Fetch co-authors
-      try {
-        const coauthorsRes = await euroOfficeApi.getCoauthors(fileId);
-        setCoAuthors(coauthorsRes.coauthors);
-      } catch {
-        setCoAuthors([]);
+      // Fetch co-authors (office files only)
+      if (isOfficeFormat) {
+        try {
+          const coauthorsRes = await euroOfficeApi.getCoauthors(fileId);
+          setCoAuthors(coauthorsRes.coauthors);
+        } catch {
+          setCoAuthors([]);
+        }
       }
 
       // Check Euro-Office Document Server connectivity probe
-      try {
-        const health = await euroOfficeApi.getHealth();
-        setIsDocumentServerOnline(health.status === 'UP');
-      } catch {
-        setIsDocumentServerOnline(false);
+      if (isOfficeFormat) {
+        try {
+          const health = await euroOfficeApi.getHealth();
+          setIsDocumentServerOnline(health.status === 'UP');
+        } catch {
+          setIsDocumentServerOnline(false);
+        }
       }
 
       // Automatically default to Euro-Office for Office files if docConfig is available
-      const ext = file.name.split('.').pop()?.toLowerCase() || '';
-      const isOfficeFormat = ['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'odt', 'ods', 'odp', 'rtf', 'txt'].includes(ext);
       setActiveEngine(isOfficeFormat ? 'euro-office' : 'native');
 
       // [HALTED: Version History feature disabled for now]
@@ -907,8 +923,8 @@ export const DocumentEditorPage: React.FC = () => {
         </div>
       )}
 
-      {/* 3. Formatting Toolbar (Rendered ONLY in Native Canvas Mode) */}
-      {activeEngine === 'native' && (
+      {/* 3. Formatting Toolbar (Rendered ONLY in Native Canvas Mode for Office Documents) */}
+      {activeEngine === 'native' && fileItem && isOfficeDocument(fileItem.name) && (
         <div className="bg-white border-b border-slate-200/80 px-3 sm:px-6 py-1.5 flex items-center gap-1 sm:gap-2 overflow-x-auto text-xs shrink-0 select-none">
           {/* Font Family Dropdown with Ethiopian Ge'ez Fonts */}
           <select
@@ -1060,68 +1076,112 @@ export const DocumentEditorPage: React.FC = () => {
         </div>
       )}
 
-      {/* 4. Main Document Workspace (Dual Engine Display) */}
+      {/* 4. Main Document Workspace (Dual Engine Display or Binary Setup Download) */}
       <div className="flex-1 relative flex min-h-0 overflow-hidden">
-        {/* ENGINE 1: Euro-Office (Sovereign Microsoft-Compatible Suite) Canvas */}
-        <div className={`flex-1 w-full h-full relative overflow-hidden bg-slate-100 ${activeEngine === 'euro-office' ? 'block' : 'hidden'}`}>
-          {!isEditorInitialized && !editorLoadError && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-xs border border-slate-200/90 px-4 py-2 rounded-xl text-xs text-slate-700 shadow-md z-20 flex items-center gap-2.5">
-              <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-              <span className="font-medium">Connecting to Euro-Office Suite Engine...</span>
-            </div>
-          )}
-          {editorLoadError && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-xl text-xs text-amber-900 shadow-md z-20 flex items-center gap-3">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>{editorLoadError}</span>
-              <button
-                type="button"
-                onClick={() => setActiveEngine('native')}
-                className="px-2.5 py-1 rounded-md bg-amber-200 hover:bg-amber-300 text-amber-900 font-semibold cursor-pointer"
-              >
-                Switch to Native Canvas
-              </button>
-            </div>
-          )}
-          <div id="euro-office-mount-point" className="w-full h-full" />
-        </div>
-
-        {/* ENGINE 2: Native Canvas Clean Paper Sheet */}
-        <main className={`flex-1 overflow-y-auto p-4 sm:p-8 flex-col justify-start items-center ${activeEngine === 'native' ? 'flex' : 'hidden'}`}>
-            {/* Authentic A4 Clean White Paper */}
-            <div className="w-full max-w-[850px] bg-white shadow-[0_4px_25px_-5px_rgba(0,0,0,0.08)] border border-slate-200/90 rounded-sm px-10 sm:px-18 py-12 sm:py-20 min-h-[1100px] flex flex-col transition-all">
-              {/* Clean Editable Document Canvas */}
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={handleContentChange}
-                readOnly={isLockedByOther}
-                placeholder=""
-                style={{
-                  fontFamily: selectedFont,
-                  fontSize: selectedFontSize,
-                  textAlign: textAlign,
-                }}
-                className={`w-full flex-1 min-h-[950px] border-none outline-none resize-none leading-relaxed text-slate-800 placeholder-slate-300 ${
-                  isLockedByOther ? 'bg-slate-50/50 cursor-not-allowed' : 'bg-transparent'
-                }`}
-              />
-            </div>
-
-            {/* Non-intrusive Document Status Footer (Outside the paper) */}
-            <div className="w-full max-w-[850px] py-3 px-2 flex items-center justify-between text-[11px] text-slate-400">
-              <div className="flex items-center gap-3">
-                <span className="font-medium text-slate-500">{fileItem.name}</span>
-                {/* [HALTED: Version History feature disabled for now]
-                <span>•</span>
-                <span>CAS Version: v{versions[0]?.version_number || 1}</span>
-                */}
+        {fileItem && !isOfficeDocument(fileItem.name) ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50 select-none">
+            <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-slate-200/90 p-8 text-center space-y-4">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
+                <Package className="w-8 h-8" />
               </div>
-              <div>
-                {content.length} characters • {content.trim().split(/\s+/).filter(Boolean).length} words
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-900 truncate" title={fileItem.name}>
+                  {fileItem.name}
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  This file is a software setup, application installer, or archive. Binary packages cannot be edited online and should be downloaded to your device.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2.5 pt-2">
+                <Button
+                  variant="primary"
+                  leftIcon={<Download className="w-4 h-4" />}
+                  onClick={async () => {
+                    try {
+                      await filesApi.downloadFile(fileItem.id, fileItem.name);
+                    } catch (err: unknown) {
+                      const msg = err instanceof Error ? err.message : 'Download failed';
+                      alert(`Could not download file: ${msg}`);
+                    }
+                  }}
+                  className="w-full justify-center"
+                >
+                  Download Application / Setup
+                </Button>
+                <Button
+                  variant="subtle"
+                  onClick={() => navigate('/drive')}
+                  className="w-full justify-center"
+                >
+                  Return to Drive
+                </Button>
               </div>
             </div>
-          </main>
+          </div>
+        ) : (
+          <>
+            {/* ENGINE 1: Euro-Office (Sovereign Microsoft-Compatible Suite) Canvas */}
+            <div className={`flex-1 w-full h-full relative overflow-hidden bg-slate-100 ${activeEngine === 'euro-office' ? 'block' : 'hidden'}`}>
+              {!isEditorInitialized && !editorLoadError && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-xs border border-slate-200/90 px-4 py-2 rounded-xl text-xs text-slate-700 shadow-md z-20 flex items-center gap-2.5">
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                  <span className="font-medium">Connecting to Euro-Office Suite Engine...</span>
+                </div>
+              )}
+              {editorLoadError && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-xl text-xs text-amber-900 shadow-md z-20 flex items-center gap-3">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>{editorLoadError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveEngine('native')}
+                    className="px-2.5 py-1 rounded-md bg-amber-200 hover:bg-amber-300 text-amber-900 font-semibold cursor-pointer"
+                  >
+                    Switch to Native Canvas
+                  </button>
+                </div>
+              )}
+              <div id="euro-office-mount-point" className="w-full h-full" />
+            </div>
+
+            {/* ENGINE 2: Native Canvas Clean Paper Sheet */}
+            <main className={`flex-1 overflow-y-auto p-4 sm:p-8 flex-col justify-start items-center ${activeEngine === 'native' ? 'flex' : 'hidden'}`}>
+              {/* Authentic A4 Clean White Paper */}
+              <div className="w-full max-w-[850px] bg-white shadow-[0_4px_25px_-5px_rgba(0,0,0,0.08)] border border-slate-200/90 rounded-sm px-10 sm:px-18 py-12 sm:py-20 min-h-[1100px] flex flex-col transition-all">
+                {/* Clean Editable Document Canvas */}
+                <textarea
+                  ref={textareaRef}
+                  value={content}
+                  onChange={handleContentChange}
+                  readOnly={isLockedByOther}
+                  placeholder=""
+                  style={{
+                    fontFamily: selectedFont,
+                    fontSize: selectedFontSize,
+                    textAlign: textAlign,
+                  }}
+                  className={`w-full flex-1 min-h-[950px] border-none outline-none resize-none leading-relaxed text-slate-800 placeholder-slate-300 ${
+                    isLockedByOther ? 'bg-slate-50/50 cursor-not-allowed' : 'bg-transparent'
+                  }`}
+                />
+              </div>
+
+              {/* Non-intrusive Document Status Footer (Outside the paper) */}
+              <div className="w-full max-w-[850px] py-3 px-2 flex items-center justify-between text-[11px] text-slate-400">
+                <div className="flex items-center gap-3">
+                  <span className="font-medium text-slate-500">{fileItem?.name}</span>
+                  {/* [HALTED: Version History feature disabled for now]
+                  <span>•</span>
+                  <span>CAS Version: v{versions[0]?.version_number || 1}</span>
+                  */}
+                </div>
+                <div>
+                  {content.length} characters • {content.trim().split(/\s+/).filter(Boolean).length} words
+                </div>
+              </div>
+            </main>
+          </>
+        )}
 
         {/* [HALTED: Version History feature disabled for now]
         {showHistoryDrawer && (
