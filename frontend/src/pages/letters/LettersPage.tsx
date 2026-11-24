@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Mail,
   Plus,
@@ -13,8 +13,17 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Building2,
+  CheckCircle2,
+  Download,
+  ExternalLink,
+  ShieldAlert,
+  ShieldCheck,
+  Check,
+  Upload,
+  CornerUpRight,
+  ArrowRight,
 } from 'lucide-react';
-import { lettersApi, departmentsApi } from '../../api/client';
+import { lettersApi, departmentsApi, filesApi } from '../../api/client';
 import type {
   LetterRecord,
   LetterDetail,
@@ -64,6 +73,24 @@ export const LettersPage: React.FC = () => {
   // Action states
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showDispatchModal, setShowDispatchModal] = useState(false);
+  const [dispatchData, setDispatchData] = useState({
+    delivery_method: 'HAND_DELIVERY',
+    dispatched_date_gc: '',
+  });
+  const [showRouteModal, setShowRouteModal] = useState(false);
+  const [routeData, setRouteData] = useState({
+    to_department_id: '',
+    action_required: 'FOR_ACTION',
+    priority: 'NORMAL',
+    instructions: '',
+  });
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [completingRoutingId, setCompletingRoutingId] = useState<string | null>(null);
+  const [completeResponseNotes, setCompleteResponseNotes] = useState('');
+  const [isActionLoading, setIsActionLoading] = useState(false);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadSummaryAndDepts = async () => {
     try {
@@ -181,22 +208,44 @@ export const LettersPage: React.FC = () => {
     }
   };
 
-  const handleApprove = async () => {
+  const handleSubmitForApproval = async () => {
     if (!selectedLetter) return;
+    setIsActionLoading(true);
     try {
-      const updated = await lettersApi.approve(selectedLetter.id);
+      await lettersApi.submit(selectedLetter.id);
+      const updated = await lettersApi.getDetail(selectedLetter.id);
       setSelectedLetter(updated);
       loadLetters();
       loadSummaryAndDepts();
     } catch {
       // ignore
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!selectedLetter) return;
+    setIsActionLoading(true);
+    try {
+      await lettersApi.approve(selectedLetter.id);
+      const updated = await lettersApi.getDetail(selectedLetter.id);
+      setSelectedLetter(updated);
+      loadLetters();
+      loadSummaryAndDepts();
+    } catch {
+      // ignore
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
   const handleReject = async () => {
     if (!selectedLetter || !rejectionReason.trim()) return;
+    setIsActionLoading(true);
     try {
-      const updated = await lettersApi.reject(selectedLetter.id, rejectionReason.trim());
+      await lettersApi.reject(selectedLetter.id, rejectionReason.trim());
+      const updated = await lettersApi.getDetail(selectedLetter.id);
       setSelectedLetter(updated);
       setShowRejectModal(false);
       setRejectionReason('');
@@ -204,6 +253,204 @@ export const LettersPage: React.FC = () => {
       loadSummaryAndDepts();
     } catch {
       // ignore
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleDispatchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLetter) return;
+    setIsActionLoading(true);
+    try {
+      await lettersApi.dispatch(selectedLetter.id, {
+        delivery_method: dispatchData.delivery_method,
+        dispatched_date_gc: dispatchData.dispatched_date_gc || undefined,
+      });
+      const updated = await lettersApi.getDetail(selectedLetter.id);
+      setSelectedLetter(updated);
+      setShowDispatchModal(false);
+      loadLetters();
+      loadSummaryAndDepts();
+    } catch {
+      // ignore
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!selectedLetter) return;
+    setIsActionLoading(true);
+    try {
+      await lettersApi.archive(selectedLetter.id);
+      const updated = await lettersApi.getDetail(selectedLetter.id);
+      setSelectedLetter(updated);
+      loadLetters();
+      loadSummaryAndDepts();
+    } catch {
+      // ignore
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleRouteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLetter || !routeData.to_department_id) return;
+    setIsActionLoading(true);
+    try {
+      await lettersApi.route(selectedLetter.id, {
+        to_department_id: routeData.to_department_id,
+        action_required: routeData.action_required,
+        priority: routeData.priority,
+        instructions: routeData.instructions.trim() || undefined,
+      });
+      const updated = await lettersApi.getDetail(selectedLetter.id);
+      setSelectedLetter(updated);
+      setShowRouteModal(false);
+      setRouteData({
+        to_department_id: '',
+        action_required: 'FOR_ACTION',
+        priority: 'NORMAL',
+        instructions: '',
+      });
+      loadLetters();
+      loadSummaryAndDepts();
+    } catch {
+      // ignore
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleAcknowledgeRouting = async (routingId: string) => {
+    if (!selectedLetter) return;
+    try {
+      await lettersApi.acknowledgeRouting(routingId);
+      const updated = await lettersApi.getDetail(selectedLetter.id);
+      setSelectedLetter(updated);
+      loadLetters();
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleCompleteRoutingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLetter || !completingRoutingId || !completeResponseNotes.trim()) return;
+    try {
+      await lettersApi.completeRouting(completingRoutingId, {
+        response_notes: completeResponseNotes.trim(),
+      });
+      const updated = await lettersApi.getDetail(selectedLetter.id);
+      setSelectedLetter(updated);
+      setShowCompleteModal(false);
+      setCompletingRoutingId(null);
+      setCompleteResponseNotes('');
+      loadLetters();
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDownloadAttachment = async (fileId: string, fileName: string) => {
+    try {
+      await filesApi.downloadFile(fileId, fileName);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedLetter) return;
+    setIsUploadingAttachment(true);
+    try {
+      const uploaded = await filesApi.upload(file, 'COMPANY');
+      await lettersApi.attachFile(selectedLetter.id, uploaded.id, 'SUPPORTING_DOCUMENT');
+      const updated = await lettersApi.getDetail(selectedLetter.id);
+      setSelectedLetter(updated);
+      loadLetters();
+    } catch {
+      // ignore
+    } finally {
+      setIsUploadingAttachment(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const formatBytes = (bytes: number): string => {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+  };
+
+  const isOfficeDoc = (filename: string): boolean => {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    return ext === 'docx' || ext === 'xlsx' || ext === 'pptx';
+  };
+
+  const getConfidentialityBadge = (level: string) => {
+    switch (level) {
+      case 'STRICTLY_CONFIDENTIAL':
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200/50">
+            <ShieldAlert className="w-3 h-3 text-rose-600" />
+            በጣም ሚስጥራዊ (Strictly Confidential)
+          </span>
+        );
+      case 'CONFIDENTIAL':
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/50">
+            <ShieldCheck className="w-3 h-3 text-amber-600" />
+            ሚስጥራዊ (Confidential)
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded">
+            መደበኛ (Standard)
+          </span>
+        );
+    }
+  };
+
+  const getDeliveryMethodLabel = (method?: string): string => {
+    switch (method) {
+      case 'HAND_DELIVERY':
+        return 'በአካል / በእጅ መልእክተኛ (Hand Delivery)';
+      case 'POSTAL':
+        return 'በፖስታ ቤት (Postal Mail)';
+      case 'COURIER':
+        return 'በፈጣን መልእክት (Courier)';
+      case 'ELECTRONIC_EMAIL':
+        return 'በኦፊሴላዊ ኢሜይል (Official Email)';
+      case 'INTERNAL_DISPATCH':
+        return 'የውስጥ ስርጭት (Internal Dispatch)';
+      default:
+        return method || 'መደበኛ';
+    }
+  };
+
+  const getRoutingActionLabel = (action: string): string => {
+    switch (action) {
+      case 'FOR_ACTION':
+        return 'ለተግባር (For Action)';
+      case 'FOR_INFORMATION':
+        return 'ለዕውቀት (For Information)';
+      case 'FOR_APPROVAL':
+        return 'ለይሁንታ (For Approval)';
+      case 'FOR_COMMENT':
+        return 'ለአስተያየት (For Comment)';
+      case 'FOR_FILING':
+        return 'ለመዝገብ (For Filing)';
+      default:
+        return action;
     }
   };
 
@@ -765,7 +1012,7 @@ export const LettersPage: React.FC = () => {
         </form>
       </Modal>
 
-      {/* 2. Letter Detail & Routing Trail Modal */}
+      {/* 2. Letter Detail & Workflow Action Drawer / Modal */}
       {selectedLetter && (
         <Modal
           isOpen={!!selectedLetter}
@@ -774,110 +1021,381 @@ export const LettersPage: React.FC = () => {
           description={selectedLetter.subject}
           maxWidth="2xl"
         >
-          <div className="space-y-6">
-            {/* Top metadata cards */}
-            <div className="grid grid-cols-3 gap-3 p-3.5 bg-zinc-50 rounded-xl text-xs">
-              <div>
-                <span className="text-zinc-400 block text-[10px]">ሁኔታ (Status)</span>
-                <span className="font-medium text-zinc-900 mt-0.5 block">{getStatusBadge(selectedLetter.status)}</span>
-              </div>
-              <div>
-                <span className="text-zinc-400 block text-[10px]">የተመዘገበበት ቀን (EC Date)</span>
-                <span className="font-medium text-zinc-900 mt-0.5 block">{selectedLetter.date_ec}</span>
-              </div>
-              <div>
-                <span className="text-zinc-400 block text-[10px]">የስራ ክፍል (Department)</span>
-                <span className="font-medium text-zinc-900 mt-0.5 block">{selectedLetter.department_name || 'ጠቅላላ መዝገብ'}</span>
-              </div>
-            </div>
-
-            {/* Inward/Outward Details */}
-            <div className="text-xs space-y-2 border-b border-zinc-100 pb-4">
-              <div className="flex justify-between">
-                <span className="text-zinc-500">ላኪ (Sender):</span>
-                <span className="font-medium text-zinc-900">{selectedLetter.sender_entity}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-zinc-500">ተቀባይ (Recipient):</span>
-                <span className="font-medium text-zinc-900">{selectedLetter.recipient_entity}</span>
-              </div>
-              {selectedLetter.notes && (
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">ማስታወሻ (Notes):</span>
-                  <span className="text-zinc-700">{selectedLetter.notes}</span>
-                </div>
+          <div className="space-y-5">
+            {/* Badges Ribbon */}
+            <div className="flex flex-wrap items-center gap-2 pb-1 border-b border-zinc-100">
+              {getDirectionBadge(selectedLetter.direction)}
+              {getStatusBadge(selectedLetter.status)}
+              {getConfidentialityBadge(selectedLetter.confidentiality)}
+              {selectedLetter.urgency === 'VERY_URGENT' && (
+                <Badge variant="danger" dot>በጣም አስቸኳይ (Very Urgent)</Badge>
+              )}
+              {selectedLetter.external_reference_number && (
+                <span className="font-mono text-[11px] text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded">
+                  የላኪ ቁጥር፦ {selectedLetter.external_reference_number}
+                </span>
               )}
             </div>
 
-            {/* Attached Drive Files */}
-            <div>
-              <h5 className="text-xs font-semibold text-zinc-900 mb-2 flex items-center gap-1.5">
-                <Paperclip className="w-3.5 h-3.5 text-zinc-400" />
-                <span>ተያያዥ ሰነዶች (Attached Documents)</span>
-              </h5>
+            {/* Top metadata 4-card strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 bg-zinc-50/80 rounded-xl text-xs border border-zinc-200/60">
+              <div>
+                <span className="text-zinc-400 block text-[10px]">ሁኔታ (Status)</span>
+                <span className="font-medium text-zinc-900 mt-0.5 block">
+                  {getStatusBadge(selectedLetter.status)}
+                </span>
+              </div>
+              <div>
+                <span className="text-zinc-400 block text-[10px]">የተመዘገበበት ቀን (Date)</span>
+                <span className="font-medium text-zinc-900 mt-0.5 block">{selectedLetter.date_ec}</span>
+                <span className="text-[10px] text-zinc-400 block">{selectedLetter.date_gc}</span>
+              </div>
+              <div>
+                <span className="text-zinc-400 block text-[10px]">የስራ ክፍል (Department)</span>
+                <span className="font-medium text-zinc-900 mt-0.5 block">
+                  {selectedLetter.department_name || 'ጠቅላላ መዝገብ ቤት'}
+                </span>
+              </div>
+              <div>
+                <span className="text-zinc-400 block text-[10px]">የጊዜ ገደብ (SLA Due)</span>
+                <span
+                  className={`font-medium mt-0.5 block ${
+                    selectedLetter.is_overdue ? 'text-red-600 font-semibold' : 'text-zinc-900'
+                  }`}
+                >
+                  {selectedLetter.is_overdue
+                    ? 'የጊዜ ገደብ አልፏል (Overdue)'
+                    : selectedLetter.days_remaining !== undefined && selectedLetter.days_remaining !== null
+                    ? `ቀሪ ${selectedLetter.days_remaining} ቀናት`
+                    : 'በጊዜ ገደብ ውስጥ'}
+                </span>
+                {selectedLetter.due_date_ec && (
+                  <span className="text-[10px] text-zinc-400 block">עד፦ {selectedLetter.due_date_ec}</span>
+                )}
+              </div>
+            </div>
+
+            {/* Inward/Outward Entity Details */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border border-zinc-200/60 bg-white text-xs">
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-semibold tracking-wider text-zinc-400">
+                  ላኪ አካል (Sender)
+                </span>
+                <div className="font-medium text-zinc-900">{selectedLetter.sender_entity}</div>
+                {selectedLetter.sender_contact && (
+                  <div className="text-[11px] text-zinc-500">አድራሻ፦ {selectedLetter.sender_contact}</div>
+                )}
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-semibold tracking-wider text-zinc-400">
+                  ተቀባይ አካል (Recipient)
+                </span>
+                <div className="font-medium text-zinc-900">{selectedLetter.recipient_entity}</div>
+                {selectedLetter.recipient_contact && (
+                  <div className="text-[11px] text-zinc-500">አድራሻ፦ {selectedLetter.recipient_contact}</div>
+                )}
+              </div>
+            </div>
+
+            {/* Rejection Alert Box if Rejected */}
+            {selectedLetter.status === 'REJECTED' && selectedLetter.rejection_reason && (
+              <div className="p-3 bg-rose-50/80 border border-rose-200/80 rounded-xl text-xs text-rose-900">
+                <div className="font-semibold text-rose-800 flex items-center gap-1.5 mb-1">
+                  <ShieldAlert className="w-4 h-4 text-rose-600" />
+                  ያልጸደቀበት ምክንያት (Rejection Feedback)
+                </div>
+                <p className="text-rose-700 italic">"{selectedLetter.rejection_reason}"</p>
+              </div>
+            )}
+
+            {/* Dispatched Info Banner if Dispatched */}
+            {selectedLetter.status === 'DISPATCHED' && (
+              <div className="p-3 bg-blue-50/70 border border-blue-200/70 rounded-xl text-xs text-blue-900 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Send className="w-4 h-4 text-blue-600" />
+                  <div>
+                    <span className="font-semibold block">ይህ ደብዳቤ በይፋ ተልኳል (Officially Dispatched)</span>
+                    <span className="text-blue-700 text-[11px]">
+                      የተላከበት ዘዴ፦ {getDeliveryMethodLabel(selectedLetter.delivery_method)}
+                    </span>
+                  </div>
+                </div>
+                {selectedLetter.dispatched_at_ec && (
+                  <span className="font-medium text-blue-800 text-xs">
+                    {selectedLetter.dispatched_at_ec}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Notes if present */}
+            {selectedLetter.notes && (
+              <div className="p-3 bg-zinc-50 rounded-xl text-xs">
+                <span className="text-zinc-400 block text-[10px] mb-0.5">ማስታወሻ (Notes)</span>
+                <span className="text-zinc-700">{selectedLetter.notes}</span>
+              </div>
+            )}
+
+            {/* Attached Drive Files & Euro-Office Direct Access */}
+            <div className="rounded-xl border border-zinc-200/60 p-3.5 bg-white space-y-2.5">
+              <div className="flex items-center justify-between">
+                <h5 className="text-xs font-semibold text-zinc-900 flex items-center gap-1.5">
+                  <Paperclip className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>ተያያዥ ሰነዶች (Attached Documents)</span>
+                  <span className="text-zinc-400 font-normal">
+                    ({selectedLetter.attachments?.length || 0})
+                  </span>
+                </h5>
+
+                <div>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<Upload className="w-3.5 h-3.5 text-zinc-500" />}
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingAttachment}
+                  >
+                    {isUploadingAttachment ? 'እየተጫነ ነው...' : 'ሰነድ አያይዝ (Attach File)'}
+                  </Button>
+                </div>
+              </div>
+
               {selectedLetter.attachments && selectedLetter.attachments.length > 0 ? (
-                <div className="divide-y divide-zinc-100 rounded-lg border border-zinc-200/60 p-2">
+                <div className="divide-y divide-zinc-100 rounded-lg border border-zinc-100 overflow-hidden">
                   {selectedLetter.attachments.map((att) => (
-                    <div key={att.id} className="py-1.5 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FileText className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                        <span className="font-medium text-zinc-900 truncate">{att.file_name}</span>
-                        <span className="text-[10px] text-zinc-400">({att.attachment_type})</span>
+                    <div
+                      key={att.id}
+                      className="p-2.5 flex items-center justify-between hover:bg-zinc-50/60 transition-colors text-xs"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-7 h-7 rounded-lg bg-zinc-100 text-zinc-600 flex items-center justify-center shrink-0">
+                          <FileText className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-medium text-zinc-900 truncate block">
+                            {att.file_name}
+                          </span>
+                          <span className="text-[10px] text-zinc-400">
+                            {formatBytes(att.size_bytes)} • {att.attachment_type}
+                          </span>
+                        </div>
                       </div>
-                      <a
-                        href={`/api/v1/files/${att.file_id}/download`}
-                        className="text-xs text-zinc-600 hover:text-zinc-900 ml-2"
-                      >
-                        አውርድ
-                      </a>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isOfficeDoc(att.file_name) && (
+                          <a
+                            href={`/editor?fileId=${att.file_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            በዩሮ-ኦፊስ ክፈት
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadAttachment(att.file_id, att.file_name)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-zinc-700 bg-zinc-100 hover:bg-zinc-200 transition-colors"
+                        >
+                          <Download className="w-3 h-3 text-zinc-500" />
+                          አውርድ
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-zinc-400 italic">ምንም ተያያዥ ሰነድ የለም።</p>
+                <p className="text-xs text-zinc-400 italic py-2 text-center">ምንም ተያያዥ ሰነድ የለም።</p>
               )}
             </div>
 
             {/* Chain of Custody Routing Trail */}
-            <div>
-              <h5 className="text-xs font-semibold text-zinc-900 mb-2 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-zinc-400" />
-                <span>የደብዳቤው የስራ እንቅስቃሴ (Chain of Custody Trail)</span>
-              </h5>
+            <div className="rounded-xl border border-zinc-200/60 p-3.5 bg-white space-y-3">
+              <div className="flex items-center justify-between">
+                <h5 className="text-xs font-semibold text-zinc-900 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>የደብዳቤው የስራ እንቅስቃሴ (Chain of Custody Trail)</span>
+                  <span className="text-zinc-400 font-normal">
+                    ({selectedLetter.routings?.length || 0})
+                  </span>
+                </h5>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={<CornerUpRight className="w-3.5 h-3.5 text-zinc-500" />}
+                  onClick={() => setShowRouteModal(true)}
+                >
+                  ወደ ክፍል አስተላልፍ (Route Letter)
+                </Button>
+              </div>
+
               {selectedLetter.routings && selectedLetter.routings.length > 0 ? (
-                <div className="space-y-2">
-                  {selectedLetter.routings.map((r) => (
-                    <div key={r.id} className="p-3 bg-zinc-50 rounded-xl text-xs space-y-1">
-                      <div className="flex items-center justify-between text-[11px] text-zinc-500">
-                        <span>ከ፦ {r.from_user_name || 'ሰራተኛ'} ({r.from_department_name || 'መምሪያ'})</span>
-                        <span className="font-semibold text-zinc-900">ወደ፦ {r.to_department_name}</span>
+                <div className="space-y-2.5">
+                  {selectedLetter.routings.map((r, idx) => (
+                    <div
+                      key={r.id}
+                      className="p-3 bg-zinc-50/80 rounded-xl text-xs space-y-2 border border-zinc-200/50"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-zinc-600">
+                          <span className="w-5 h-5 rounded-full bg-zinc-200 text-zinc-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          <span className="font-medium text-zinc-800">
+                            {r.from_department_name || 'ጠቅላላ መዝገብ'}
+                          </span>
+                          <ArrowRight className="w-3 h-3 text-zinc-400" />
+                          <span className="font-semibold text-zinc-900">
+                            {r.to_department_name}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                            r.status === 'COMPLETED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : r.status === 'ACKNOWLEDGED'
+                              ? 'bg-sky-100 text-sky-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {r.status}
+                        </span>
                       </div>
+
                       {r.instructions && (
-                        <p className="text-zinc-700 italic">" {r.instructions} "</p>
+                        <p className="text-zinc-700 italic pl-6 text-[11px]">
+                          "{r.instructions}"
+                        </p>
                       )}
-                      <div className="flex justify-between items-center pt-1 text-[10px] text-zinc-400">
-                        <span>ተግባር፦ {r.action_required}</span>
-                        <span className="font-medium text-emerald-700">{r.status}</span>
+
+                      <div className="flex flex-wrap items-center justify-between pt-1 border-t border-zinc-200/40 text-[11px] text-zinc-400 pl-6 gap-2">
+                        <span>ተግባር፦ {getRoutingActionLabel(r.action_required)}</span>
+
+                        {/* Interactive Acknowledge / Complete Buttons */}
+                        <div className="flex items-center gap-1.5">
+                          {r.status === 'PENDING' && (
+                            <button
+                              type="button"
+                              onClick={() => handleAcknowledgeRouting(r.id)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200/60"
+                            >
+                              <Check className="w-3 h-3" />
+                              ተቀብያለሁ (Acknowledge)
+                            </button>
+                          )}
+                          {(r.status === 'PENDING' || r.status === 'ACKNOWLEDGED') && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCompletingRoutingId(r.id);
+                                setShowCompleteModal(true);
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60"
+                            >
+                              <CheckCircle2 className="w-3 h-3" />
+                              ተግባር አጠናቅቅ (Complete)
+                            </button>
+                          )}
+                        </div>
                       </div>
+
+                      {/* Display response notes if completed */}
+                      {r.response_notes && (
+                        <div className="mt-1.5 p-2 bg-emerald-50/70 rounded-lg text-[11px] text-emerald-900 border border-emerald-100">
+                          <span className="font-semibold block text-emerald-800">
+                            የተግባር ማጠናቀቂያ ማብራሪያ (Resolution Note)፦
+                          </span>
+                          <span>{r.response_notes}</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-zinc-400 italic">ይህ ደብዳቤ እስካሁን ወደ ሌላ ክፍል አልተመራም።</p>
+                <p className="text-xs text-zinc-400 italic py-2 text-center">
+                  ይህ ደብዳቤ እስካሁን ወደ ሌላ ክፍል አልተመራም።
+                </p>
               )}
             </div>
 
-            {/* Approval Controls for Outward Drafts */}
-            {selectedLetter.direction === 'OUTWARD' && selectedLetter.status === 'PENDING_APPROVAL' && (
-              <div className="flex justify-end gap-2 pt-4 border-t border-zinc-100">
-                <Button variant="danger" size="sm" onClick={() => setShowRejectModal(true)}>
-                  መልስ / አትፍቀድ (Reject)
-                </Button>
-                <Button variant="primary" size="sm" onClick={handleApprove}>
-                  አጽድቅ (Approve Outward Letter)
-                </Button>
+            {/* Bottom Workflow Action Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-zinc-100">
+              <Button variant="ghost" size="sm" onClick={() => setSelectedLetter(null)}>
+                ተመለስ (Close)
+              </Button>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* 1. Outward Draft -> Submit for Approval */}
+                {selectedLetter.direction === 'OUTWARD' && selectedLetter.status === 'DRAFT' && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleSubmitForApproval}
+                    disabled={isActionLoading}
+                  >
+                    ለይሁንታ አቅርብ (Submit for Approval)
+                  </Button>
+                )}
+
+                {/* 2. Pending Approval -> Reject or Approve */}
+                {selectedLetter.status === 'PENDING_APPROVAL' && (
+                  <>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => setShowRejectModal(true)}
+                      disabled={isActionLoading}
+                    >
+                      መልስ / አትፍቀድ (Reject)
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleApprove}
+                      disabled={isActionLoading}
+                    >
+                      አጽድቅ (Approve Outward Letter)
+                    </Button>
+                  </>
+                )}
+
+                {/* 3. Approved Outward -> Dispatch */}
+                {selectedLetter.direction === 'OUTWARD' && selectedLetter.status === 'APPROVED' && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon={<Send className="w-3.5 h-3.5" />}
+                    onClick={() => setShowDispatchModal(true)}
+                    disabled={isActionLoading}
+                  >
+                    አስረክብ / ላክ (Dispatch Letter)
+                  </Button>
+                )}
+
+                {/* 4. Active Letter -> Archive */}
+                {selectedLetter.status !== 'ARCHIVED' &&
+                  (selectedLetter.status === 'DISPATCHED' ||
+                    selectedLetter.status === 'RECEIVED' ||
+                    selectedLetter.status === 'APPROVED') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleArchive}
+                      disabled={isActionLoading}
+                    >
+                      በመዝገብ አስቀምጥ (Archive Letter)
+                    </Button>
+                  )}
               </div>
-            )}
+            </div>
           </div>
         </Modal>
       )}
@@ -890,7 +1408,7 @@ export const LettersPage: React.FC = () => {
       >
         <div className="space-y-4">
           <Input
-            placeholder="ምክንያቱን እዚህ ይግለጹ..."
+            placeholder="ደብዳቤው ያልጸደቀበትን ዝርዝር ምክንያት እዚህ ይግለጹ..."
             value={rejectionReason}
             onChange={(e) => setRejectionReason(e.target.value)}
             required
@@ -900,11 +1418,178 @@ export const LettersPage: React.FC = () => {
             <Button variant="ghost" onClick={() => setShowRejectModal(false)}>
               ተመለስ (Cancel)
             </Button>
-            <Button variant="danger" onClick={handleReject}>
+            <Button variant="danger" onClick={handleReject} disabled={isActionLoading}>
               አትፍቀድ (Confirm Rejection)
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* 4. Dispatch Modal */}
+      <Modal
+        isOpen={showDispatchModal}
+        onClose={() => setShowDispatchModal(false)}
+        title="ደብዳቤውን ላክ / አስረክብ (Dispatch Official Letter)"
+        maxWidth="md"
+      >
+        <form onSubmit={handleDispatchSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-zinc-600 mb-1.5">
+              የመላኪያ / የስርጭት ዘዴ (Delivery Method)
+            </label>
+            <select
+              value={dispatchData.delivery_method}
+              onChange={(e) => setDispatchData({ ...dispatchData, delivery_method: e.target.value })}
+              className="w-full rounded-lg bg-zinc-50 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+            >
+              <option value="HAND_DELIVERY">በአካል / በእጅ መልእክተኛ (Hand Delivery)</option>
+              <option value="POSTAL">በፖስታ ቤት የተላከ (Postal Mail)</option>
+              <option value="COURIER">በፈጣን መልእክት ድርጅት (Courier)</option>
+              <option value="ELECTRONIC_EMAIL">በኦፊሴላዊ ኢሜይል (Official Email)</option>
+              <option value="INTERNAL_DISPATCH">የውስጥ ስርጭት (Internal Dispatch)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-600 mb-1.5">
+              የተላከበት ቀን (Dispatched Date GC - ከተፈለገ ይቀይሩ)
+            </label>
+            <input
+              type="date"
+              value={dispatchData.dispatched_date_gc}
+              onChange={(e) => setDispatchData({ ...dispatchData, dispatched_date_gc: e.target.value })}
+              className="w-full rounded-lg bg-zinc-50 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100">
+            <Button variant="ghost" type="button" onClick={() => setShowDispatchModal(false)}>
+              ተመለስ (Cancel)
+            </Button>
+            <Button variant="primary" type="submit" disabled={isActionLoading}>
+              ላክ / አሰራጭ (Confirm Dispatch)
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* 5. Inter-Departmental Route / Transfer Modal */}
+      <Modal
+        isOpen={showRouteModal}
+        onClose={() => setShowRouteModal(false)}
+        title="ደብዳቤውን ወደ ሌላ ክፍል አስተላልፍ (Transfer / Route Letter)"
+        maxWidth="md"
+      >
+        <form onSubmit={handleRouteSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-zinc-600 mb-1.5">
+              ተቀባይ የስራ ክፍል (Target Department)
+            </label>
+            <select
+              value={routeData.to_department_id}
+              onChange={(e) => setRouteData({ ...routeData, to_department_id: e.target.value })}
+              required
+              className="w-full rounded-lg bg-zinc-50 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+            >
+              <option value="">ክፍል ይምረጡ (Select Department)...</option>
+              {departments.map((dept) => (
+                <option key={dept.id} value={dept.id}>
+                  {dept.name} ({dept.code})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-zinc-600 mb-1.5">
+                የሚፈለገው ተግባር (Action Required)
+              </label>
+              <select
+                value={routeData.action_required}
+                onChange={(e) => setRouteData({ ...routeData, action_required: e.target.value })}
+                className="w-full rounded-lg bg-zinc-50 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+              >
+                <option value="FOR_ACTION">ለተግባር (For Action)</option>
+                <option value="FOR_INFORMATION">ለዕውቀት (For Information)</option>
+                <option value="FOR_APPROVAL">ለይሁንታ (For Approval)</option>
+                <option value="FOR_COMMENT">ለአስተያየት (For Comment)</option>
+                <option value="FOR_FILING">ለመዝገብ (For Filing)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-zinc-600 mb-1.5">
+                አጣዳፊነት (Priority)
+              </label>
+              <select
+                value={routeData.priority}
+                onChange={(e) => setRouteData({ ...routeData, priority: e.target.value })}
+                className="w-full rounded-lg bg-zinc-50 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+              >
+                <option value="NORMAL">መደበኛ (Normal)</option>
+                <option value="URGENT">አስቸኳይ (Urgent)</option>
+                <option value="VERY_URGENT">በጣም አስቸኳይ (Very Urgent)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-600 mb-1.5">
+              የመመሪያ ማብራሪያ (Instructions)
+            </label>
+            <textarea
+              rows={3}
+              placeholder="ለምሳሌ፡ እባክዎ አስፈላጊውን የፋይናንስ ኦዲት መረጃ አዘጋጅተው ያቅርቡ..."
+              value={routeData.instructions}
+              onChange={(e) => setRouteData({ ...routeData, instructions: e.target.value })}
+              className="w-full rounded-lg bg-zinc-50 border border-zinc-200/80 p-2.5 text-xs text-zinc-900 focus:bg-white focus:outline-none resize-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100">
+            <Button variant="ghost" type="button" onClick={() => setShowRouteModal(false)}>
+              ተመለስ (Cancel)
+            </Button>
+            <Button variant="primary" type="submit" disabled={isActionLoading}>
+              አስተላልፍ (Confirm Transfer)
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* 6. Complete Routing Task Modal */}
+      <Modal
+        isOpen={showCompleteModal}
+        onClose={() => setShowCompleteModal(false)}
+        title="የተግባር ማጠናቀቂያ ማብራሪያ (Complete Routing Task)"
+        maxWidth="md"
+      >
+        <form onSubmit={handleCompleteRoutingSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-zinc-600 mb-1.5">
+              የተከናወነ ተግባር ዝርዝር (Resolution Notes)
+            </label>
+            <textarea
+              rows={3}
+              placeholder="የተከናወነውን ስራ ወይም የተሰጠውን ምላሽ እዚህ ያብራሩ..."
+              value={completeResponseNotes}
+              onChange={(e) => setCompleteResponseNotes(e.target.value)}
+              required
+              autoFocus
+              className="w-full rounded-lg bg-zinc-50 border border-zinc-200/80 p-2.5 text-xs text-zinc-900 focus:bg-white focus:outline-none resize-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100">
+            <Button variant="ghost" type="button" onClick={() => setShowCompleteModal(false)}>
+              ተመለስ (Cancel)
+            </Button>
+            <Button variant="primary" type="submit" disabled={isActionLoading}>
+              አጠናቅቅ (Confirm Resolution)
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

@@ -193,7 +193,7 @@ export interface LetterRecord {
   reference_number: string;
   external_reference_number?: string;
   direction: 'INWARD' | 'OUTWARD' | 'INTERNAL_MEMO';
-  status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'DISPATCHED' | 'RECEIVED' | 'ARCHIVED';
+  status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'DISPATCHED' | 'RECEIVED' | 'REJECTED' | 'ARCHIVED';
   confidentiality: 'NORMAL' | 'CONFIDENTIAL' | 'STRICTLY_CONFIDENTIAL';
   urgency: 'NORMAL' | 'URGENT' | 'VERY_URGENT';
   delivery_method?: 'HAND_DELIVERY' | 'POSTAL' | 'COURIER' | 'ELECTRONIC_EMAIL' | 'INTERNAL_DISPATCH' | string;
