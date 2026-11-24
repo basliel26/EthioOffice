@@ -50,10 +50,10 @@ export const LettersPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Detail Modal & Routing
+  // Detail Modal
   const [selectedLetter, setSelectedLetter] = useState<LetterDetail | null>(null);
 
-  // New Letter Modal
+  // Register Letter Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newLetter, setNewLetter] = useState({
     direction: 'INWARD' as 'INWARD' | 'OUTWARD' | 'INTERNAL_MEMO',
@@ -395,93 +395,34 @@ export const LettersPage: React.FC = () => {
     return ext === 'docx' || ext === 'xlsx' || ext === 'pptx';
   };
 
-  const getConfidentialityBadge = (level: string) => {
-    switch (level) {
-      case 'STRICTLY_CONFIDENTIAL':
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200/50">
-            <ShieldAlert className="w-3 h-3 text-rose-600" />
-            በጣም ሚስጥራዊ (Strictly Confidential)
-          </span>
-        );
-      case 'CONFIDENTIAL':
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/50">
-            <ShieldCheck className="w-3 h-3 text-amber-600" />
-            ሚስጥራዊ (Confidential)
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded">
-            መደበኛ (Standard)
-          </span>
-        );
-    }
-  };
-
-  const getDeliveryMethodLabel = (method?: string): string => {
-    switch (method) {
-      case 'HAND_DELIVERY':
-        return 'በአካል / በእጅ መልእክተኛ (Hand Delivery)';
-      case 'POSTAL':
-        return 'በፖስታ ቤት (Postal Mail)';
-      case 'COURIER':
-        return 'በፈጣን መልእክት (Courier)';
-      case 'ELECTRONIC_EMAIL':
-        return 'በኦፊሴላዊ ኢሜይል (Official Email)';
-      case 'INTERNAL_DISPATCH':
-        return 'የውስጥ ስርጭት (Internal Dispatch)';
-      default:
-        return method || 'መደበኛ';
-    }
-  };
-
-  const getRoutingActionLabel = (action: string): string => {
-    switch (action) {
-      case 'FOR_ACTION':
-        return 'ለተግባር (For Action)';
-      case 'FOR_INFORMATION':
-        return 'ለዕውቀት (For Information)';
-      case 'FOR_APPROVAL':
-        return 'ለይሁንታ (For Approval)';
-      case 'FOR_COMMENT':
-        return 'ለአስተያየት (For Comment)';
-      case 'FOR_FILING':
-        return 'ለመዝገብ (For Filing)';
-      default:
-        return action;
-    }
-  };
-
   const tabs = [
-    { id: 'ALL', label: 'ሁሉም (All Letters)' },
-    { id: 'INWARD', label: 'ገቢ ደብዳቤዎች (Inward)' },
-    { id: 'OUTWARD', label: 'ወጪ ደብዳቤዎች (Outward)' },
-    { id: 'INTERNAL_MEMO', label: 'የውስጥ ማስታወሻ (Internal Memos)' },
+    { id: 'ALL', label: 'All Letters' },
+    { id: 'INWARD', label: 'Inward' },
+    { id: 'OUTWARD', label: 'Outward' },
+    { id: 'INTERNAL_MEMO', label: 'Internal Memos' },
   ];
 
   const getDirectionBadge = (direction: string) => {
     switch (direction) {
       case 'INWARD':
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 bg-blue-50/90 px-2 py-0.5 rounded-md">
-            <ArrowDownLeft className="w-3 h-3 text-blue-600" />
-            ገቢ (Inward)
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+            <ArrowDownLeft className="w-3.5 h-3.5 text-slate-500" />
+            Inward
           </span>
         );
       case 'OUTWARD':
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50/90 px-2 py-0.5 rounded-md">
-            <ArrowUpRight className="w-3 h-3 text-emerald-600" />
-            ወጪ (Outward)
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+            <ArrowUpRight className="w-3.5 h-3.5 text-slate-500" />
+            Outward
           </span>
         );
       case 'INTERNAL_MEMO':
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-purple-700 bg-purple-50/90 px-2 py-0.5 rounded-md">
-            <FileText className="w-3 h-3 text-purple-600" />
-            ማስታወሻ (Memo)
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+            <FileText className="w-3.5 h-3.5 text-slate-500" />
+            Memo
           </span>
         );
       default:
@@ -492,32 +433,87 @@ export const LettersPage: React.FC = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'APPROVED':
-        return <Badge variant="success" dot>የጸደቀ (Approved)</Badge>;
+        return <Badge variant="success" dot>Approved</Badge>;
       case 'PENDING_APPROVAL':
-        return <Badge variant="warning" dot>ይሁንታ የሚጠብቅ (Pending)</Badge>;
+        return <Badge variant="warning" dot>Pending Approval</Badge>;
       case 'DISPATCHED':
-        return <Badge variant="info" dot>የተላከ (Dispatched)</Badge>;
+        return <Badge variant="info" dot>Dispatched</Badge>;
       case 'RECEIVED':
-        return <Badge variant="default" dot>የደረሰ (Received)</Badge>;
+        return <Badge variant="default" dot>Received</Badge>;
       case 'ARCHIVED':
-        return <Badge variant="neutral">የተመዘገበ (Archived)</Badge>;
+        return <Badge variant="neutral">Archived</Badge>;
       case 'REJECTED':
-        return <Badge variant="danger" dot>ተመላሽ የተደረገ (Rejected)</Badge>;
+        return <Badge variant="danger" dot>Rejected</Badge>;
       default:
-        return <Badge variant="neutral">ረቂቅ (Draft)</Badge>;
+        return <Badge variant="neutral">Draft</Badge>;
+    }
+  };
+
+  const getConfidentialityBadge = (level: string) => {
+    switch (level) {
+      case 'STRICTLY_CONFIDENTIAL':
+        return (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200/60">
+            <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+            Strictly Confidential
+          </span>
+        );
+      case 'CONFIDENTIAL':
+        return (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+            Confidential
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const getDeliveryMethodLabel = (method?: string): string => {
+    switch (method) {
+      case 'HAND_DELIVERY':
+        return 'Hand Delivery';
+      case 'POSTAL':
+        return 'Postal Mail';
+      case 'COURIER':
+        return 'Courier Service';
+      case 'ELECTRONIC_EMAIL':
+        return 'Official Email';
+      case 'INTERNAL_DISPATCH':
+        return 'Internal Dispatch';
+      default:
+        return method || 'Standard';
+    }
+  };
+
+  const getRoutingActionLabel = (action: string): string => {
+    switch (action) {
+      case 'FOR_ACTION':
+        return 'For Action';
+      case 'FOR_INFORMATION':
+        return 'For Information';
+      case 'FOR_APPROVAL':
+        return 'For Approval';
+      case 'FOR_COMMENT':
+        return 'For Comment';
+      case 'FOR_FILING':
+        return 'For Filing';
+      default:
+        return action;
     }
   };
 
   return (
     <div className="space-y-6 select-none font-sans">
-      {/* Top Header & Registration Action */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100">
+      {/* Header & New Letter Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-lg font-semibold text-zinc-900 tracking-tight">
-            የደብዳቤዎች መዝገብ ቤት (Official Letter Registry)
+          <h1 className="text-lg font-semibold text-slate-900 tracking-tight">
+            Official Letter Registry
           </h1>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            የገቢ፣ ወጪ እና የውስጥ ደብዳቤዎች ዲጂታል ምዝገባ እና የስራ እንቅስቃሴዎች
+          <p className="text-xs text-slate-500 mt-0.5">
+            Institutional correspondence registry, approvals, and chain of custody
           </p>
         </div>
 
@@ -527,11 +523,11 @@ export const LettersPage: React.FC = () => {
           leftIcon={<Plus className="w-4 h-4" />}
           onClick={() => setShowCreateModal(true)}
         >
-          አዲስ ደብዳቤ መዝግብ (Register Letter)
+          Register Letter
         </Button>
       </div>
 
-      {/* Executive KPI Ribbon */}
+      {/* KPI Ribbon */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* Total Letters */}
         <div
@@ -542,21 +538,21 @@ export const LettersPage: React.FC = () => {
           }}
           className={`p-4 rounded-xl border transition-all cursor-pointer bg-white ${
             directionTab === 'ALL' && statusFilter === 'ALL' && !isOverdueOnly
-              ? 'border-blue-400/80 shadow-xs ring-1 ring-blue-100'
-              : 'border-zinc-200/60 hover:border-zinc-300 shadow-2xs'
+              ? 'border-slate-400 shadow-xs'
+              : 'border-slate-200 hover:border-slate-300 shadow-2xs'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-500">ጠቅላላ መዝገብ (Total)</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+            <span className="text-xs font-medium text-slate-500">Total Letters</span>
+            <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
               <Mail className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-zinc-900 tracking-tight mt-1.5">
+          <div className="text-2xl font-bold text-slate-900 tracking-tight mt-1.5">
             {summary?.total_letters ?? 0}
           </div>
-          <p className="text-[11px] text-zinc-400 mt-1 truncate">
-            ገቢ {summary?.inward_count ?? 0} • ወጪ {summary?.outward_count ?? 0} • ማስታወሻ {summary?.memo_count ?? 0}
+          <p className="text-xs text-slate-400 mt-1 truncate">
+            Inward: {summary?.inward_count ?? 0} • Outward: {summary?.outward_count ?? 0} • Memos: {summary?.memo_count ?? 0}
           </p>
         </div>
 
@@ -568,21 +564,21 @@ export const LettersPage: React.FC = () => {
           }}
           className={`p-4 rounded-xl border transition-all cursor-pointer bg-white ${
             statusFilter === 'PENDING_APPROVAL'
-              ? 'border-amber-400 shadow-xs ring-1 ring-amber-100 bg-amber-50/20'
-              : 'border-zinc-200/60 hover:border-zinc-300 shadow-2xs'
+              ? 'border-slate-400 shadow-xs'
+              : 'border-slate-200 hover:border-slate-300 shadow-2xs'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-500">ይሁንታ የሚጠብቁ (Pending)</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+            <span className="text-xs font-medium text-slate-500">Pending Approvals</span>
+            <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
               <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-zinc-900 tracking-tight mt-1.5">
+          <div className="text-2xl font-bold text-slate-900 tracking-tight mt-1.5">
             {summary?.pending_approval_count ?? 0}
           </div>
-          <p className="text-[11px] text-amber-600 font-medium mt-1 truncate">
-            {summary?.urgent_open_count ?? 0} አስቸኳይ ይሁንታ የሚጠብቁ
+          <p className="text-xs text-slate-400 mt-1 truncate">
+            {summary?.urgent_open_count ?? 0} urgent reviews pending
           </p>
         </div>
 
@@ -594,21 +590,21 @@ export const LettersPage: React.FC = () => {
           }}
           className={`p-4 rounded-xl border transition-all cursor-pointer bg-white ${
             statusFilter === 'DISPATCHED'
-              ? 'border-emerald-400 shadow-xs ring-1 ring-emerald-100 bg-emerald-50/20'
-              : 'border-zinc-200/60 hover:border-zinc-300 shadow-2xs'
+              ? 'border-slate-400 shadow-xs'
+              : 'border-slate-200 hover:border-slate-300 shadow-2xs'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-500">የተላኩ / የወጡ (Dispatched)</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <span className="text-xs font-medium text-slate-500">Dispatched Letters</span>
+            <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
               <Send className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-zinc-900 tracking-tight mt-1.5">
+          <div className="text-2xl font-bold text-slate-900 tracking-tight mt-1.5">
             {summary?.dispatched_count ?? 0}
           </div>
-          <p className="text-[11px] text-zinc-400 mt-1 truncate">
-            የደረሱ {summary?.received_count ?? 0} • የተመዘገቡ {summary?.archived_count ?? 0}
+          <p className="text-xs text-slate-400 mt-1 truncate">
+            Received: {summary?.received_count ?? 0} • Archived: {summary?.archived_count ?? 0}
           </p>
         </div>
 
@@ -620,30 +616,30 @@ export const LettersPage: React.FC = () => {
           }}
           className={`p-4 rounded-xl border transition-all cursor-pointer bg-white ${
             isOverdueOnly
-              ? 'border-rose-400 shadow-xs ring-1 ring-rose-100 bg-rose-50/20'
-              : 'border-zinc-200/60 hover:border-zinc-300 shadow-2xs'
+              ? 'border-rose-400 shadow-xs'
+              : 'border-slate-200 hover:border-slate-300 shadow-2xs'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-500">የጊዜ ገደብ ያለፈባቸው (Overdue)</span>
-            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+            <span className="text-xs font-medium text-slate-500">Overdue SLA</span>
+            <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
               <AlertTriangle className="w-4 h-4" />
             </div>
           </div>
           <div
             className={`text-2xl font-bold tracking-tight mt-1.5 ${
-              (summary?.overdue_sla_count ?? 0) > 0 ? 'text-rose-600' : 'text-zinc-900'
+              (summary?.overdue_sla_count ?? 0) > 0 ? 'text-rose-600' : 'text-slate-900'
             }`}
           >
             {summary?.overdue_sla_count ?? 0}
           </div>
-          <p className="text-[11px] text-zinc-400 mt-1 truncate">
-            የኢትዮጵያ የስራ ቀናት SLA
+          <p className="text-xs text-slate-400 mt-1 truncate">
+            Working-day SLA deadline exceeded
           </p>
         </div>
       </div>
 
-      {/* Filter Tabs & Search Bar */}
+      {/* Primary Direction Tabs & Search Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <Tabs
           items={tabs}
@@ -651,32 +647,33 @@ export const LettersPage: React.FC = () => {
           onChange={(id) => setDirectionTab(id as any)}
         />
 
-        <div className="w-full sm:w-72">
+        <div className="w-full sm:w-80">
           <Input
-            placeholder="በቁጥር፣ ርዕስ፣ ላኪ ወይም ተቀባይ ፈልግ..."
+            placeholder="Search reference, subject, sender, or recipient..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            leftIcon={<Search className="w-3.5 h-3.5" />}
+            leftIcon={<Search className="w-4 h-4 text-slate-400" />}
           />
         </div>
       </div>
 
-      {/* Secondary Filter Dropdowns & SLA Controls */}
+      {/* Secondary Filter Dropdowns & Controls */}
       <div className="flex flex-wrap items-center gap-2 pt-1">
         {/* Status Filter */}
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           aria-label="Filter by letter status"
-          className="text-xs font-medium text-zinc-700 bg-white border border-zinc-200/80 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-zinc-400"
+          className="text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-slate-400"
         >
-          <option value="ALL">ሁሉም ሁኔታዎች (All Statuses)</option>
-          <option value="DRAFT">ረቂቅ (Draft)</option>
-          <option value="PENDING_APPROVAL">ይሁንታ የሚጠብቅ (Pending Approval)</option>
-          <option value="APPROVED">የጸደቀ (Approved)</option>
-          <option value="DISPATCHED">የተላከ (Dispatched)</option>
-          <option value="RECEIVED">የደረሰ (Received)</option>
-          <option value="ARCHIVED">በመዝገብ የገባ (Archived)</option>
+          <option value="ALL">All Statuses</option>
+          <option value="DRAFT">Draft</option>
+          <option value="PENDING_APPROVAL">Pending Approval</option>
+          <option value="APPROVED">Approved</option>
+          <option value="DISPATCHED">Dispatched</option>
+          <option value="RECEIVED">Received</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="ARCHIVED">Archived</option>
         </select>
 
         {/* Urgency Filter */}
@@ -684,12 +681,12 @@ export const LettersPage: React.FC = () => {
           value={urgencyFilter}
           onChange={(e) => setUrgencyFilter(e.target.value)}
           aria-label="Filter by letter urgency"
-          className="text-xs font-medium text-zinc-700 bg-white border border-zinc-200/80 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-zinc-400"
+          className="text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-slate-400"
         >
-          <option value="ALL">ሁሉም አጣዳፊነት (All Urgencies)</option>
-          <option value="NORMAL">መደበኛ - 5 ቀናት (Normal)</option>
-          <option value="URGENT">አስቸኳይ - 3 ቀናት (Urgent)</option>
-          <option value="VERY_URGENT">በጣም አስቸኳይ - 24 ሰዓት (Very Urgent)</option>
+          <option value="ALL">All Urgencies</option>
+          <option value="NORMAL">Normal (5 Days SLA)</option>
+          <option value="URGENT">Urgent (3 Days SLA)</option>
+          <option value="VERY_URGENT">Very Urgent (24h SLA)</option>
         </select>
 
         {/* Department Filter */}
@@ -698,9 +695,9 @@ export const LettersPage: React.FC = () => {
             value={departmentFilter}
             onChange={(e) => setDepartmentFilter(e.target.value)}
             aria-label="Filter by department"
-            className="text-xs font-medium text-zinc-700 bg-white border border-zinc-200/80 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-zinc-400"
+            className="text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-slate-400"
           >
-            <option value="ALL">ሁሉም የስራ ክፍሎች (All Departments)</option>
+            <option value="ALL">All Departments</option>
             {departments.map((dept) => (
               <option key={dept.id} value={dept.id}>
                 {dept.name} ({dept.code})
@@ -713,105 +710,106 @@ export const LettersPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setIsOverdueOnly(!isOverdueOnly)}
-          className={`px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
             isOverdueOnly
-              ? 'bg-rose-50 text-rose-700 border border-rose-200'
-              : 'bg-white text-zinc-600 border border-zinc-200/80 hover:bg-zinc-50'
+              ? 'bg-rose-50 text-rose-700 border border-rose-200 font-semibold'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
           }`}
         >
           <span
             className={`w-1.5 h-1.5 rounded-full ${
-              isOverdueOnly ? 'bg-rose-600 animate-pulse' : 'bg-zinc-400'
+              isOverdueOnly ? 'bg-rose-600' : 'bg-slate-400'
             }`}
           />
-          የጊዜ ገደብ ያለፈባቸው (Overdue Only)
+          Overdue Only
         </button>
 
-        {/* Reset Filters Button */}
+        {/* Reset Filters */}
         {isFiltered && (
           <button
             type="button"
             onClick={handleResetFilters}
-            className="px-2.5 py-1.5 text-xs font-medium rounded-lg text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 transition-colors flex items-center gap-1"
+            className="px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors flex items-center gap-1"
           >
-            <RotateCcw className="w-3 h-3" />
-            ዳግም ጀምር (Clear Filters)
+            <RotateCcw className="w-3.5 h-3.5" />
+            Reset Filters
           </button>
         )}
       </div>
 
-      {/* Letters Data Table */}
-      <div className="bg-white rounded-2xl shadow-xs border border-zinc-200/60 overflow-hidden">
+      {/* Letters List Table */}
+      <div className="bg-white rounded-xl shadow-2xs border border-slate-200 overflow-hidden">
         {isLoading ? (
-          <div className="py-20 text-center text-xs text-zinc-400">ደብዳቤዎች እየተጫኑ ነው...</div>
+          <div className="py-20 text-center text-xs text-slate-400">Loading correspondence...</div>
         ) : letters.length === 0 ? (
           <div className="py-20 text-center space-y-2">
-            <Mail className="w-8 h-8 text-zinc-300 mx-auto" />
-            <p className="text-sm font-medium text-zinc-900">ምንም ደብዳቤ አልተመዘገበም (No letters found)</p>
-            <p className="text-xs text-zinc-400">አዲስ ደብዳቤ በመመዝገብ ስራዎን ይጀምሩ።</p>
+            <Mail className="w-8 h-8 text-slate-300 mx-auto" />
+            <p className="text-sm font-medium text-slate-900">No letters found</p>
+            <p className="text-xs text-slate-400">Register a new letter to start tracking correspondence.</p>
           </div>
         ) : (
-          <div className="divide-y divide-zinc-100">
+          <div className="divide-y divide-slate-100">
             {letters.map((letter) => (
               <div
                 key={letter.id}
                 onClick={() => handleOpenDetail(letter.id)}
-                className="flex items-center justify-between p-4 hover:bg-zinc-50/70 transition-colors cursor-pointer group"
+                className="flex items-center justify-between p-4 hover:bg-slate-50/70 transition-colors cursor-pointer group"
               >
-                {/* Left: Ref number, Subject, Direction, Tags */}
+                {/* Left: Reference, Badges, Subject, Sender & Recipient */}
                 <div className="min-w-0 flex-1 pr-4">
                   <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                    <span className="font-mono text-xs font-semibold text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">
+                    <span className="font-mono text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
                       {letter.reference_number}
                     </span>
                     {getDirectionBadge(letter.direction)}
                     {getStatusBadge(letter.status)}
+                    {getConfidentialityBadge(letter.confidentiality)}
                     {letter.urgency === 'VERY_URGENT' && (
-                      <Badge variant="danger">አስቸኳይ</Badge>
+                      <Badge variant="danger" dot>Very Urgent</Badge>
                     )}
                     {letter.department_name && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500 bg-zinc-100/70 px-2 py-0.5 rounded">
-                        <Building2 className="w-3 h-3 text-zinc-400" />
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                        <Building2 className="w-3.5 h-3.5 text-slate-400" />
                         {letter.department_name}
                       </span>
                     )}
                   </div>
-                  <h4 className="text-xs font-medium text-zinc-900 truncate group-hover:text-zinc-950">
+                  <h4 className="text-sm font-medium text-slate-900 truncate group-hover:text-slate-950">
                     {letter.subject}
                   </h4>
-                  <div className="flex items-center gap-3 mt-1.5 text-[11px] text-zinc-400">
-                    <span>ላኪ፦ {letter.sender_entity}</span>
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
+                    <span>From: {letter.sender_entity}</span>
                     <span>•</span>
-                    <span>ተቀባይ፦ {letter.recipient_entity}</span>
+                    <span>To: {letter.recipient_entity}</span>
                     {letter.attachment_file_id && (
                       <>
                         <span>•</span>
-                        <span className="inline-flex items-center gap-1 text-zinc-500">
-                          <Paperclip className="w-3 h-3" />
-                          ተያያዥ ሰነድ
+                        <span className="inline-flex items-center gap-1 text-slate-500">
+                          <Paperclip className="w-3.5 h-3.5" />
+                          Attached Document
                         </span>
                       </>
                     )}
                   </div>
                 </div>
 
-                {/* Right: Date, Due SLA, Arrow */}
+                {/* Right: Date, Due SLA, Chevron */}
                 <div className="flex items-center gap-4 shrink-0 text-right">
                   <div>
-                    <span className="text-xs font-medium text-zinc-800 block">
-                      {letter.date_ec}
+                    <span className="text-xs font-medium text-slate-800 block">
+                      {letter.date_gc}
                     </span>
                     {letter.days_remaining !== undefined && letter.days_remaining !== null && (
                       <span
-                        className={`text-[10px] ${
-                          letter.is_overdue ? 'text-red-500 font-semibold' : 'text-zinc-400'
+                        className={`text-xs ${
+                          letter.is_overdue ? 'text-rose-600 font-semibold' : 'text-slate-400'
                         }`}
                       >
-                        {letter.is_overdue ? 'የጊዜ ገደብ አልፏል' : `ቀሪ ${letter.days_remaining} ቀናት`}
+                        {letter.is_overdue ? 'Overdue' : `${letter.days_remaining} days left`}
                       </span>
                     )}
                   </div>
-                  <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600 transition-colors" />
+                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-600 transition-colors" />
                 </div>
               </div>
             ))}
@@ -823,54 +821,54 @@ export const LettersPage: React.FC = () => {
       <Modal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        title="አዲስ ደብዳቤ መዝግብ (Register Official Letter)"
+        title="Register Official Letter"
         maxWidth="xl"
       >
         <form onSubmit={handleCreateSubmit} className="space-y-4">
-          <div className="grid grid-cols-3 gap-2 p-1 bg-zinc-100/80 rounded-lg text-xs font-medium">
+          <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 rounded-lg text-xs font-medium">
             <button
               type="button"
               onClick={() => setNewLetter({ ...newLetter, direction: 'INWARD' })}
               className={`py-1.5 rounded-md transition-colors flex items-center justify-center gap-1.5 ${
                 newLetter.direction === 'INWARD'
-                  ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
-                  : 'text-zinc-600'
+                  ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                  : 'text-slate-600'
               }`}
             >
-              <ArrowDownLeft className="w-3.5 h-3.5 text-blue-600" />
-              ገቢ (Inward)
+              <ArrowDownLeft className="w-3.5 h-3.5 text-slate-500" />
+              Inward Letter
             </button>
             <button
               type="button"
               onClick={() => setNewLetter({ ...newLetter, direction: 'OUTWARD' })}
               className={`py-1.5 rounded-md transition-colors flex items-center justify-center gap-1.5 ${
                 newLetter.direction === 'OUTWARD'
-                  ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
-                  : 'text-zinc-600'
+                  ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                  : 'text-slate-600'
               }`}
             >
-              <ArrowUpRight className="w-3.5 h-3.5 text-emerald-600" />
-              ወጪ (Outward)
+              <ArrowUpRight className="w-3.5 h-3.5 text-slate-500" />
+              Outward Letter
             </button>
             <button
               type="button"
               onClick={() => setNewLetter({ ...newLetter, direction: 'INTERNAL_MEMO' })}
               className={`py-1.5 rounded-md transition-colors flex items-center justify-center gap-1.5 ${
                 newLetter.direction === 'INTERNAL_MEMO'
-                  ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
-                  : 'text-zinc-600'
+                  ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                  : 'text-slate-600'
               }`}
             >
-              <FileText className="w-3.5 h-3.5 text-purple-600" />
-              ማስታወሻ (Memo)
+              <FileText className="w-3.5 h-3.5 text-slate-500" />
+              Internal Memo
             </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2">
               <Input
-                label="የደብዳቤው ርዕስ ወይም ጉዳይ (Subject)"
-                placeholder="ለምሳሌ፡ የ2018 ዓ.ም የፋይናንስ ኦዲት ሪፖርት"
+                label="Subject / Purpose"
+                placeholder="e.g. Annual Financial Audit Report 2026"
                 value={newLetter.subject}
                 onChange={(e) => setNewLetter({ ...newLetter, subject: e.target.value })}
                 required
@@ -878,15 +876,15 @@ export const LettersPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-600 mb-1.5">
-                የስራ ክፍል (Department)
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                Department
               </label>
               <select
                 value={newLetter.department_id}
                 onChange={(e) => setNewLetter({ ...newLetter, department_id: e.target.value })}
-                className="w-full rounded-lg bg-zinc-50/80 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+                className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none"
               >
-                <option value="">ጠቅላላ መዝገብ ቤት (Org Wide)</option>
+                <option value="">General Registry (Organization Wide)</option>
                 {departments.map((dept) => (
                   <option key={dept.id} value={dept.id}>
                     {dept.name} ({dept.code})
@@ -899,30 +897,30 @@ export const LettersPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Input
-                label="ላኪ ተቋም / ክፍል (Sender Entity)"
-                placeholder="ለምሳሌ፡ የገንዘብ ሚኒስቴር ወይም ዳይሬክቶሬት"
+                label="Sender Entity"
+                placeholder="e.g. Ministry of Finance or Partner Corp"
                 value={newLetter.sender_entity}
                 onChange={(e) => setNewLetter({ ...newLetter, sender_entity: e.target.value })}
                 required
               />
               <Input
-                label="የላኪ አድራሻ / ስልክ (Sender Contact)"
-                placeholder="ስልክ ወይም ኢሜይል (አማራጭ)"
+                label="Sender Contact (Optional)"
+                placeholder="Phone or email"
                 value={newLetter.sender_contact}
                 onChange={(e) => setNewLetter({ ...newLetter, sender_contact: e.target.value })}
               />
             </div>
             <div className="space-y-2">
               <Input
-                label="ተቀባይ ተቋም / ክፍል (Recipient Entity)"
-                placeholder="ለምሳሌ፡ ዋና ስራ አስፈፃሚ ወይም የሰው ኃይል"
+                label="Recipient Entity"
+                placeholder="e.g. Chief Executive Officer or HR Dept"
                 value={newLetter.recipient_entity}
                 onChange={(e) => setNewLetter({ ...newLetter, recipient_entity: e.target.value })}
                 required
               />
               <Input
-                label="የተቀባይ አድራሻ / ስልክ (Recipient Contact)"
-                placeholder="ስልክ ወይም ኢሜይል (አማራጭ)"
+                label="Recipient Contact (Optional)"
+                placeholder="Phone or email"
                 value={newLetter.recipient_contact}
                 onChange={(e) => setNewLetter({ ...newLetter, recipient_contact: e.target.value })}
               />
@@ -931,52 +929,48 @@ export const LettersPage: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-600 mb-1.5">
-                አስቸኳይነት (Urgency & SLA)
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                Urgency SLA
               </label>
               <select
                 value={newLetter.urgency}
                 onChange={(e) => setNewLetter({ ...newLetter, urgency: e.target.value })}
-                className="w-full rounded-lg bg-zinc-50/80 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+                className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none"
               >
-                <option value="NORMAL">መደበኛ - 5 የስራ ቀናት (Normal - 5 Days SLA)</option>
-                <option value="URGENT">አስቸኳይ - 3 የስራ ቀናት (Urgent - 3 Days SLA)</option>
-                <option value="VERY_URGENT">በጣም አስቸኳይ - 24 ሰዓት (Very Urgent - 24h SLA)</option>
+                <option value="NORMAL">Normal - 5 Working Days</option>
+                <option value="URGENT">Urgent - 3 Working Days</option>
+                <option value="VERY_URGENT">Very Urgent - 24 Hours</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-600 mb-1.5">
-                የደህንነት ደረጃ (Confidentiality)
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                Confidentiality Level
               </label>
               <select
                 value={newLetter.confidentiality}
                 onChange={(e) => setNewLetter({ ...newLetter, confidentiality: e.target.value })}
-                className="w-full rounded-lg bg-zinc-50/80 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+                className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none"
               >
-                <option value="NORMAL">መደበኛ (Standard / Public)</option>
-                <option value="CONFIDENTIAL">ሚስጥራዊ (Confidential)</option>
-                <option value="STRICTLY_CONFIDENTIAL">በጣም ሚስጥራዊ (Strictly Confidential)</option>
+                <option value="NORMAL">Standard / Unclassified</option>
+                <option value="CONFIDENTIAL">Confidential</option>
+                <option value="STRICTLY_CONFIDENTIAL">Strictly Confidential</option>
               </select>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
-              label={
-                newLetter.direction === 'INWARD'
-                  ? 'የውስጥ መዝገብ ቁጥር (ከተፈለገ በራስ-ሰር ይዘጋጃል)'
-                  : 'የደብዳቤ ቁጥር (ከተፈለገ በራስ-ሰር ይዘጋጃል)'
-              }
-              placeholder="ለምሳሌ፡ EO/FIN/2018/0042"
+              label="Reference Number (Auto-generated if empty)"
+              placeholder="e.g. EO/FIN/2026/0042"
               value={newLetter.reference_number}
               onChange={(e) => setNewLetter({ ...newLetter, reference_number: e.target.value })}
             />
 
             {newLetter.direction === 'INWARD' ? (
               <Input
-                label="የላኪው ተቋም ደብዳቤ ቁጥር (External Ref Number)"
-                placeholder="ለምሳሌ፡ ገ/ሚ/04-2018"
+                label="External Reference Number (Sender's Ref)"
+                placeholder="e.g. MOF/04-2026"
                 value={newLetter.external_reference_number}
                 onChange={(e) =>
                   setNewLetter({ ...newLetter, external_reference_number: e.target.value })
@@ -984,8 +978,8 @@ export const LettersPage: React.FC = () => {
               />
             ) : (
               <Input
-                label="ተጨማሪ ማስታወሻ (Notes)"
-                placeholder="ተያያዥ ማብራሪያ ካለ..."
+                label="Notes / Description"
+                placeholder="Additional instructions or notes..."
                 value={newLetter.notes}
                 onChange={(e) => setNewLetter({ ...newLetter, notes: e.target.value })}
               />
@@ -994,25 +988,25 @@ export const LettersPage: React.FC = () => {
 
           {newLetter.direction === 'INWARD' && (
             <Input
-              label="ተጨማሪ ማስታወሻ (Notes)"
-              placeholder="ተያያዥ ማብራሪያ ካለ..."
+              label="Notes / Description"
+              placeholder="Additional instructions or notes..."
               value={newLetter.notes}
               onChange={(e) => setNewLetter({ ...newLetter, notes: e.target.value })}
             />
           )}
 
-          <div className="flex justify-end gap-2 pt-3 border-t border-zinc-100">
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
             <Button variant="ghost" type="button" onClick={() => setShowCreateModal(false)}>
-              ተመለስ (Cancel)
+              Cancel
             </Button>
             <Button variant="primary" type="submit">
-              መዝግብ (Save Letter)
+              Register Letter
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* 2. Letter Detail & Workflow Action Drawer / Modal */}
+      {/* 2. Letter Detail & Workflow Drawer Modal */}
       {selectedLetter && (
         <Modal
           isOpen={!!selectedLetter}
@@ -1022,87 +1016,87 @@ export const LettersPage: React.FC = () => {
           maxWidth="2xl"
         >
           <div className="space-y-5">
-            {/* Badges Ribbon */}
-            <div className="flex flex-wrap items-center gap-2 pb-1 border-b border-zinc-100">
+            {/* Badges Strip */}
+            <div className="flex flex-wrap items-center gap-2 pb-1 border-b border-slate-100">
               {getDirectionBadge(selectedLetter.direction)}
               {getStatusBadge(selectedLetter.status)}
               {getConfidentialityBadge(selectedLetter.confidentiality)}
               {selectedLetter.urgency === 'VERY_URGENT' && (
-                <Badge variant="danger" dot>በጣም አስቸኳይ (Very Urgent)</Badge>
+                <Badge variant="danger" dot>Very Urgent</Badge>
               )}
               {selectedLetter.external_reference_number && (
-                <span className="font-mono text-[11px] text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded">
-                  የላኪ ቁጥር፦ {selectedLetter.external_reference_number}
+                <span className="font-mono text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                  Sender Ref: {selectedLetter.external_reference_number}
                 </span>
               )}
             </div>
 
-            {/* Top metadata 4-card strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 bg-zinc-50/80 rounded-xl text-xs border border-zinc-200/60">
+            {/* Top Metadata Strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 bg-slate-50 rounded-xl text-xs border border-slate-200">
               <div>
-                <span className="text-zinc-400 block text-[10px]">ሁኔታ (Status)</span>
-                <span className="font-medium text-zinc-900 mt-0.5 block">
+                <span className="text-slate-400 block text-xs">Status</span>
+                <span className="font-medium text-slate-900 mt-0.5 block">
                   {getStatusBadge(selectedLetter.status)}
                 </span>
               </div>
               <div>
-                <span className="text-zinc-400 block text-[10px]">የተመዘገበበት ቀን (Date)</span>
-                <span className="font-medium text-zinc-900 mt-0.5 block">{selectedLetter.date_ec}</span>
-                <span className="text-[10px] text-zinc-400 block">{selectedLetter.date_gc}</span>
+                <span className="text-slate-400 block text-xs">Registered Date</span>
+                <span className="font-medium text-slate-900 mt-0.5 block">{selectedLetter.date_gc}</span>
+                <span className="text-xs text-slate-400 block">{selectedLetter.date_ec}</span>
               </div>
               <div>
-                <span className="text-zinc-400 block text-[10px]">የስራ ክፍል (Department)</span>
-                <span className="font-medium text-zinc-900 mt-0.5 block">
-                  {selectedLetter.department_name || 'ጠቅላላ መዝገብ ቤት'}
+                <span className="text-slate-400 block text-xs">Department</span>
+                <span className="font-medium text-slate-900 mt-0.5 block">
+                  {selectedLetter.department_name || 'General Registry'}
                 </span>
               </div>
               <div>
-                <span className="text-zinc-400 block text-[10px]">የጊዜ ገደብ (SLA Due)</span>
+                <span className="text-slate-400 block text-xs">SLA Due Date</span>
                 <span
                   className={`font-medium mt-0.5 block ${
-                    selectedLetter.is_overdue ? 'text-red-600 font-semibold' : 'text-zinc-900'
+                    selectedLetter.is_overdue ? 'text-rose-600 font-semibold' : 'text-slate-900'
                   }`}
                 >
                   {selectedLetter.is_overdue
-                    ? 'የጊዜ ገደብ አልፏል (Overdue)'
+                    ? 'Overdue'
                     : selectedLetter.days_remaining !== undefined && selectedLetter.days_remaining !== null
-                    ? `ቀሪ ${selectedLetter.days_remaining} ቀናት`
-                    : 'በጊዜ ገደብ ውስጥ'}
+                    ? `${selectedLetter.days_remaining} days left`
+                    : 'Within SLA'}
                 </span>
-                {selectedLetter.due_date_ec && (
-                  <span className="text-[10px] text-zinc-400 block">עד፦ {selectedLetter.due_date_ec}</span>
+                {selectedLetter.due_date_gc && (
+                  <span className="text-xs text-slate-400 block">Due: {selectedLetter.due_date_gc}</span>
                 )}
               </div>
             </div>
 
-            {/* Inward/Outward Entity Details */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border border-zinc-200/60 bg-white text-xs">
+            {/* Sender & Recipient Entities */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl border border-slate-200 bg-white text-xs">
               <div className="space-y-1">
-                <span className="text-[10px] uppercase font-semibold tracking-wider text-zinc-400">
-                  ላኪ አካል (Sender)
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Sender Entity
                 </span>
-                <div className="font-medium text-zinc-900">{selectedLetter.sender_entity}</div>
+                <div className="font-medium text-slate-900 text-sm">{selectedLetter.sender_entity}</div>
                 {selectedLetter.sender_contact && (
-                  <div className="text-[11px] text-zinc-500">አድራሻ፦ {selectedLetter.sender_contact}</div>
+                  <div className="text-xs text-slate-500">Contact: {selectedLetter.sender_contact}</div>
                 )}
               </div>
               <div className="space-y-1">
-                <span className="text-[10px] uppercase font-semibold tracking-wider text-zinc-400">
-                  ተቀባይ አካል (Recipient)
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Recipient Entity
                 </span>
-                <div className="font-medium text-zinc-900">{selectedLetter.recipient_entity}</div>
+                <div className="font-medium text-slate-900 text-sm">{selectedLetter.recipient_entity}</div>
                 {selectedLetter.recipient_contact && (
-                  <div className="text-[11px] text-zinc-500">አድራሻ፦ {selectedLetter.recipient_contact}</div>
+                  <div className="text-xs text-slate-500">Contact: {selectedLetter.recipient_contact}</div>
                 )}
               </div>
             </div>
 
-            {/* Rejection Alert Box if Rejected */}
+            {/* Reviewer Feedback if Rejected */}
             {selectedLetter.status === 'REJECTED' && selectedLetter.rejection_reason && (
-              <div className="p-3 bg-rose-50/80 border border-rose-200/80 rounded-xl text-xs text-rose-900">
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900">
                 <div className="font-semibold text-rose-800 flex items-center gap-1.5 mb-1">
                   <ShieldAlert className="w-4 h-4 text-rose-600" />
-                  ያልጸደቀበት ምክንያት (Rejection Feedback)
+                  Reviewer Feedback / Reason for Rejection
                 </div>
                 <p className="text-rose-700 italic">"{selectedLetter.rejection_reason}"</p>
               </div>
@@ -1110,39 +1104,39 @@ export const LettersPage: React.FC = () => {
 
             {/* Dispatched Info Banner if Dispatched */}
             {selectedLetter.status === 'DISPATCHED' && (
-              <div className="p-3 bg-blue-50/70 border border-blue-200/70 rounded-xl text-xs text-blue-900 flex items-center justify-between">
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Send className="w-4 h-4 text-blue-600" />
+                  <Send className="w-4 h-4 text-slate-600" />
                   <div>
-                    <span className="font-semibold block">ይህ ደብዳቤ በይፋ ተልኳል (Officially Dispatched)</span>
-                    <span className="text-blue-700 text-[11px]">
-                      የተላከበት ዘዴ፦ {getDeliveryMethodLabel(selectedLetter.delivery_method)}
+                    <span className="font-semibold block">Officially Dispatched</span>
+                    <span className="text-slate-600 text-xs">
+                      Delivery Method: {getDeliveryMethodLabel(selectedLetter.delivery_method)}
                     </span>
                   </div>
                 </div>
-                {selectedLetter.dispatched_at_ec && (
-                  <span className="font-medium text-blue-800 text-xs">
-                    {selectedLetter.dispatched_at_ec}
+                {selectedLetter.dispatched_at_gc && (
+                  <span className="font-medium text-slate-700 text-xs">
+                    {selectedLetter.dispatched_at_gc}
                   </span>
                 )}
               </div>
             )}
 
-            {/* Notes if present */}
+            {/* Notes */}
             {selectedLetter.notes && (
-              <div className="p-3 bg-zinc-50 rounded-xl text-xs">
-                <span className="text-zinc-400 block text-[10px] mb-0.5">ማስታወሻ (Notes)</span>
-                <span className="text-zinc-700">{selectedLetter.notes}</span>
+              <div className="p-3 bg-slate-50 rounded-xl text-xs">
+                <span className="text-slate-400 block text-xs mb-0.5">Notes</span>
+                <span className="text-slate-700">{selectedLetter.notes}</span>
               </div>
             )}
 
-            {/* Attached Drive Files & Euro-Office Direct Access */}
-            <div className="rounded-xl border border-zinc-200/60 p-3.5 bg-white space-y-2.5">
+            {/* Attached Documents */}
+            <div className="rounded-xl border border-slate-200 p-3.5 bg-white space-y-3">
               <div className="flex items-center justify-between">
-                <h5 className="text-xs font-semibold text-zinc-900 flex items-center gap-1.5">
-                  <Paperclip className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>ተያያዥ ሰነዶች (Attached Documents)</span>
-                  <span className="text-zinc-400 font-normal">
+                <h5 className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                  <Paperclip className="w-4 h-4 text-slate-400" />
+                  <span>Attached Documents</span>
+                  <span className="text-slate-400 font-normal">
                     ({selectedLetter.attachments?.length || 0})
                   </span>
                 </h5>
@@ -1157,31 +1151,31 @@ export const LettersPage: React.FC = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    leftIcon={<Upload className="w-3.5 h-3.5 text-zinc-500" />}
+                    leftIcon={<Upload className="w-3.5 h-3.5 text-slate-500" />}
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploadingAttachment}
                   >
-                    {isUploadingAttachment ? 'እየተጫነ ነው...' : 'ሰነድ አያይዝ (Attach File)'}
+                    {isUploadingAttachment ? 'Uploading...' : 'Attach File'}
                   </Button>
                 </div>
               </div>
 
               {selectedLetter.attachments && selectedLetter.attachments.length > 0 ? (
-                <div className="divide-y divide-zinc-100 rounded-lg border border-zinc-100 overflow-hidden">
+                <div className="divide-y divide-slate-100 rounded-lg border border-slate-100 overflow-hidden">
                   {selectedLetter.attachments.map((att) => (
                     <div
                       key={att.id}
-                      className="p-2.5 flex items-center justify-between hover:bg-zinc-50/60 transition-colors text-xs"
+                      className="p-2.5 flex items-center justify-between hover:bg-slate-50 transition-colors text-xs"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-7 h-7 rounded-lg bg-zinc-100 text-zinc-600 flex items-center justify-center shrink-0">
+                        <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
                           <FileText className="w-3.5 h-3.5" />
                         </div>
                         <div className="min-w-0">
-                          <span className="font-medium text-zinc-900 truncate block">
+                          <span className="font-medium text-slate-900 truncate block">
                             {att.file_name}
                           </span>
-                          <span className="text-[10px] text-zinc-400">
+                          <span className="text-xs text-slate-400">
                             {formatBytes(att.size_bytes)} • {att.attachment_type}
                           </span>
                         </div>
@@ -1193,36 +1187,36 @@ export const LettersPage: React.FC = () => {
                             href={`/editor?fileId=${att.file_id}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
                           >
                             <ExternalLink className="w-3 h-3" />
-                            በዩሮ-ኦፊስ ክፈት
+                            Open in Euro-Office
                           </a>
                         )}
                         <button
                           type="button"
                           onClick={() => handleDownloadAttachment(att.file_id, att.file_name)}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-zinc-700 bg-zinc-100 hover:bg-zinc-200 transition-colors"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
                         >
-                          <Download className="w-3 h-3 text-zinc-500" />
-                          አውርድ
+                          <Download className="w-3 h-3 text-slate-500" />
+                          Download
                         </button>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-zinc-400 italic py-2 text-center">ምንም ተያያዥ ሰነድ የለም።</p>
+                <p className="text-xs text-slate-400 italic py-2 text-center">No documents attached.</p>
               )}
             </div>
 
             {/* Chain of Custody Routing Trail */}
-            <div className="rounded-xl border border-zinc-200/60 p-3.5 bg-white space-y-3">
+            <div className="rounded-xl border border-slate-200 p-3.5 bg-white space-y-3">
               <div className="flex items-center justify-between">
-                <h5 className="text-xs font-semibold text-zinc-900 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>የደብዳቤው የስራ እንቅስቃሴ (Chain of Custody Trail)</span>
-                  <span className="text-zinc-400 font-normal">
+                <h5 className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-slate-400" />
+                  <span>Chain of Custody & Department Routing</span>
+                  <span className="text-slate-400 font-normal">
                     ({selectedLetter.routings?.length || 0})
                   </span>
                 </h5>
@@ -1230,40 +1224,37 @@ export const LettersPage: React.FC = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  leftIcon={<CornerUpRight className="w-3.5 h-3.5 text-zinc-500" />}
+                  leftIcon={<CornerUpRight className="w-3.5 h-3.5 text-slate-500" />}
                   onClick={() => setShowRouteModal(true)}
                 >
-                  ወደ ክፍል አስተላልፍ (Route Letter)
+                  Route Letter
                 </Button>
               </div>
 
               {selectedLetter.routings && selectedLetter.routings.length > 0 ? (
                 <div className="space-y-2.5">
-                  {selectedLetter.routings.map((r, idx) => (
+                  {selectedLetter.routings.map((r) => (
                     <div
                       key={r.id}
-                      className="p-3 bg-zinc-50/80 rounded-xl text-xs space-y-2 border border-zinc-200/50"
+                      className="p-3 bg-slate-50 rounded-xl text-xs space-y-2 border border-slate-200/60"
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-zinc-600">
-                          <span className="w-5 h-5 rounded-full bg-zinc-200 text-zinc-700 text-[10px] font-bold flex items-center justify-center shrink-0">
-                            {idx + 1}
+                        <div className="flex items-center gap-1.5 text-slate-600">
+                          <span className="font-medium text-slate-800">
+                            {r.from_department_name || 'General Registry'}
                           </span>
-                          <span className="font-medium text-zinc-800">
-                            {r.from_department_name || 'ጠቅላላ መዝገብ'}
-                          </span>
-                          <ArrowRight className="w-3 h-3 text-zinc-400" />
-                          <span className="font-semibold text-zinc-900">
+                          <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="font-semibold text-slate-900">
                             {r.to_department_name}
                           </span>
                         </div>
                         <span
-                          className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                          className={`text-xs font-medium px-2 py-0.5 rounded ${
                             r.status === 'COMPLETED'
-                              ? 'bg-emerald-100 text-emerald-800'
+                              ? 'bg-slate-200 text-slate-800'
                               : r.status === 'ACKNOWLEDGED'
-                              ? 'bg-sky-100 text-sky-800'
-                              : 'bg-amber-100 text-amber-800'
+                              ? 'bg-slate-200 text-slate-800'
+                              : 'bg-slate-100 text-slate-700'
                           }`}
                         >
                           {r.status}
@@ -1271,13 +1262,13 @@ export const LettersPage: React.FC = () => {
                       </div>
 
                       {r.instructions && (
-                        <p className="text-zinc-700 italic pl-6 text-[11px]">
+                        <p className="text-slate-700 italic text-xs">
                           "{r.instructions}"
                         </p>
                       )}
 
-                      <div className="flex flex-wrap items-center justify-between pt-1 border-t border-zinc-200/40 text-[11px] text-zinc-400 pl-6 gap-2">
-                        <span>ተግባር፦ {getRoutingActionLabel(r.action_required)}</span>
+                      <div className="flex flex-wrap items-center justify-between pt-1 border-t border-slate-200/60 text-xs text-slate-400 gap-2">
+                        <span>Action: {getRoutingActionLabel(r.action_required)}</span>
 
                         {/* Interactive Acknowledge / Complete Buttons */}
                         <div className="flex items-center gap-1.5">
@@ -1285,10 +1276,10 @@ export const LettersPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleAcknowledgeRouting(r.id)}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200/60"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-200"
                             >
-                              <Check className="w-3 h-3" />
-                              ተቀብያለሁ (Acknowledge)
+                              <Check className="w-3 h-3 text-slate-600" />
+                              Acknowledge Receipt
                             </button>
                           )}
                           {(r.status === 'PENDING' || r.status === 'ACKNOWLEDGED') && (
@@ -1298,10 +1289,10 @@ export const LettersPage: React.FC = () => {
                                 setCompletingRoutingId(r.id);
                                 setShowCompleteModal(true);
                               }}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-200"
                             >
-                              <CheckCircle2 className="w-3 h-3" />
-                              ተግባር አጠናቅቅ (Complete)
+                              <CheckCircle2 className="w-3 h-3 text-slate-600" />
+                              Complete Task
                             </button>
                           )}
                         </div>
@@ -1309,9 +1300,9 @@ export const LettersPage: React.FC = () => {
 
                       {/* Display response notes if completed */}
                       {r.response_notes && (
-                        <div className="mt-1.5 p-2 bg-emerald-50/70 rounded-lg text-[11px] text-emerald-900 border border-emerald-100">
-                          <span className="font-semibold block text-emerald-800">
-                            የተግባር ማጠናቀቂያ ማብራሪያ (Resolution Note)፦
+                        <div className="mt-1.5 p-2 bg-slate-100 rounded-lg text-xs text-slate-800">
+                          <span className="font-semibold block text-slate-700 mb-0.5">
+                            Resolution Note:
                           </span>
                           <span>{r.response_notes}</span>
                         </div>
@@ -1320,16 +1311,16 @@ export const LettersPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-zinc-400 italic py-2 text-center">
-                  ይህ ደብዳቤ እስካሁን ወደ ሌላ ክፍል አልተመራም።
+                <p className="text-xs text-slate-400 italic py-2 text-center">
+                  This letter has not been routed to any department yet.
                 </p>
               )}
             </div>
 
             {/* Bottom Workflow Action Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-zinc-100">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-slate-100">
               <Button variant="ghost" size="sm" onClick={() => setSelectedLetter(null)}>
-                ተመለስ (Close)
+                Close
               </Button>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -1341,7 +1332,7 @@ export const LettersPage: React.FC = () => {
                     onClick={handleSubmitForApproval}
                     disabled={isActionLoading}
                   >
-                    ለይሁንታ አቅርብ (Submit for Approval)
+                    Submit for Approval
                   </Button>
                 )}
 
@@ -1354,7 +1345,7 @@ export const LettersPage: React.FC = () => {
                       onClick={() => setShowRejectModal(true)}
                       disabled={isActionLoading}
                     >
-                      መልስ / አትፍቀድ (Reject)
+                      Reject
                     </Button>
                     <Button
                       variant="primary"
@@ -1362,7 +1353,7 @@ export const LettersPage: React.FC = () => {
                       onClick={handleApprove}
                       disabled={isActionLoading}
                     >
-                      አጽድቅ (Approve Outward Letter)
+                      Approve Outward Letter
                     </Button>
                   </>
                 )}
@@ -1376,7 +1367,7 @@ export const LettersPage: React.FC = () => {
                     onClick={() => setShowDispatchModal(true)}
                     disabled={isActionLoading}
                   >
-                    አስረክብ / ላክ (Dispatch Letter)
+                    Dispatch Letter
                   </Button>
                 )}
 
@@ -1391,7 +1382,7 @@ export const LettersPage: React.FC = () => {
                       onClick={handleArchive}
                       disabled={isActionLoading}
                     >
-                      በመዝገብ አስቀምጥ (Archive Letter)
+                      Archive Letter
                     </Button>
                   )}
               </div>
@@ -1404,11 +1395,12 @@ export const LettersPage: React.FC = () => {
       <Modal
         isOpen={showRejectModal}
         onClose={() => setShowRejectModal(false)}
-        title="ደብዳቤውን ያለማጽደቂያ ምክንያት (Rejection Feedback)"
+        title="Reject Letter Draft"
       >
         <div className="space-y-4">
           <Input
-            placeholder="ደብዳቤው ያልጸደቀበትን ዝርዝር ምክንያት እዚህ ይግለጹ..."
+            label="Reason for Rejection / Changes Requested"
+            placeholder="Enter feedback or explanation for the author..."
             value={rejectionReason}
             onChange={(e) => setRejectionReason(e.target.value)}
             required
@@ -1416,10 +1408,10 @@ export const LettersPage: React.FC = () => {
           />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setShowRejectModal(false)}>
-              ተመለስ (Cancel)
+              Cancel
             </Button>
             <Button variant="danger" onClick={handleReject} disabled={isActionLoading}>
-              አትፍቀድ (Confirm Rejection)
+              Confirm Rejection
             </Button>
           </div>
         </div>
@@ -1429,45 +1421,45 @@ export const LettersPage: React.FC = () => {
       <Modal
         isOpen={showDispatchModal}
         onClose={() => setShowDispatchModal(false)}
-        title="ደብዳቤውን ላክ / አስረክብ (Dispatch Official Letter)"
+        title="Dispatch Official Letter"
         maxWidth="md"
       >
         <form onSubmit={handleDispatchSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-zinc-600 mb-1.5">
-              የመላኪያ / የስርጭት ዘዴ (Delivery Method)
+            <label className="block text-xs font-medium text-slate-600 mb-1.5">
+              Delivery Method
             </label>
             <select
               value={dispatchData.delivery_method}
               onChange={(e) => setDispatchData({ ...dispatchData, delivery_method: e.target.value })}
-              className="w-full rounded-lg bg-zinc-50 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+              className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none"
             >
-              <option value="HAND_DELIVERY">በአካል / በእጅ መልእክተኛ (Hand Delivery)</option>
-              <option value="POSTAL">በፖስታ ቤት የተላከ (Postal Mail)</option>
-              <option value="COURIER">በፈጣን መልእክት ድርጅት (Courier)</option>
-              <option value="ELECTRONIC_EMAIL">በኦፊሴላዊ ኢሜይል (Official Email)</option>
-              <option value="INTERNAL_DISPATCH">የውስጥ ስርጭት (Internal Dispatch)</option>
+              <option value="HAND_DELIVERY">Hand Delivery</option>
+              <option value="POSTAL">Postal Mail</option>
+              <option value="COURIER">Courier Service</option>
+              <option value="ELECTRONIC_EMAIL">Official Email</option>
+              <option value="INTERNAL_DISPATCH">Internal Dispatch</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-600 mb-1.5">
-              የተላከበት ቀን (Dispatched Date GC - ከተፈለገ ይቀይሩ)
+            <label className="block text-xs font-medium text-slate-600 mb-1.5">
+              Dispatched Date (Optional override)
             </label>
             <input
               type="date"
               value={dispatchData.dispatched_date_gc}
               onChange={(e) => setDispatchData({ ...dispatchData, dispatched_date_gc: e.target.value })}
-              className="w-full rounded-lg bg-zinc-50 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+              className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100">
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
             <Button variant="ghost" type="button" onClick={() => setShowDispatchModal(false)}>
-              ተመለስ (Cancel)
+              Cancel
             </Button>
             <Button variant="primary" type="submit" disabled={isActionLoading}>
-              ላክ / አሰራጭ (Confirm Dispatch)
+              Confirm Dispatch
             </Button>
           </div>
         </form>
@@ -1477,21 +1469,21 @@ export const LettersPage: React.FC = () => {
       <Modal
         isOpen={showRouteModal}
         onClose={() => setShowRouteModal(false)}
-        title="ደብዳቤውን ወደ ሌላ ክፍል አስተላልፍ (Transfer / Route Letter)"
+        title="Route Letter to Department"
         maxWidth="md"
       >
         <form onSubmit={handleRouteSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-zinc-600 mb-1.5">
-              ተቀባይ የስራ ክፍል (Target Department)
+            <label className="block text-xs font-medium text-slate-600 mb-1.5">
+              Target Department
             </label>
             <select
               value={routeData.to_department_id}
               onChange={(e) => setRouteData({ ...routeData, to_department_id: e.target.value })}
               required
-              className="w-full rounded-lg bg-zinc-50 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+              className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none"
             >
-              <option value="">ክፍል ይምረጡ (Select Department)...</option>
+              <option value="">Select Destination Department...</option>
               {departments.map((dept) => (
                 <option key={dept.id} value={dept.id}>
                   {dept.name} ({dept.code})
@@ -1502,57 +1494,57 @@ export const LettersPage: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-600 mb-1.5">
-                የሚፈለገው ተግባር (Action Required)
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                Action Required
               </label>
               <select
                 value={routeData.action_required}
                 onChange={(e) => setRouteData({ ...routeData, action_required: e.target.value })}
-                className="w-full rounded-lg bg-zinc-50 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+                className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none"
               >
-                <option value="FOR_ACTION">ለተግባር (For Action)</option>
-                <option value="FOR_INFORMATION">ለዕውቀት (For Information)</option>
-                <option value="FOR_APPROVAL">ለይሁንታ (For Approval)</option>
-                <option value="FOR_COMMENT">ለአስተያየት (For Comment)</option>
-                <option value="FOR_FILING">ለመዝገብ (For Filing)</option>
+                <option value="FOR_ACTION">For Action</option>
+                <option value="FOR_INFORMATION">For Information</option>
+                <option value="FOR_APPROVAL">For Approval</option>
+                <option value="FOR_COMMENT">For Comment</option>
+                <option value="FOR_FILING">For Filing</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-600 mb-1.5">
-                አጣዳፊነት (Priority)
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                Priority
               </label>
               <select
                 value={routeData.priority}
                 onChange={(e) => setRouteData({ ...routeData, priority: e.target.value })}
-                className="w-full rounded-lg bg-zinc-50 border border-zinc-200/80 px-3 py-2 text-xs text-zinc-900 focus:bg-white focus:outline-none"
+                className="w-full rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none"
               >
-                <option value="NORMAL">መደበኛ (Normal)</option>
-                <option value="URGENT">አስቸኳይ (Urgent)</option>
-                <option value="VERY_URGENT">በጣም አስቸኳይ (Very Urgent)</option>
+                <option value="NORMAL">Normal</option>
+                <option value="URGENT">Urgent</option>
+                <option value="VERY_URGENT">Very Urgent</option>
               </select>
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-600 mb-1.5">
-              የመመሪያ ማብራሪያ (Instructions)
+            <label className="block text-xs font-medium text-slate-600 mb-1.5">
+              Routing Instructions
             </label>
             <textarea
               rows={3}
-              placeholder="ለምሳሌ፡ እባክዎ አስፈላጊውን የፋይናንስ ኦዲት መረጃ አዘጋጅተው ያቅርቡ..."
+              placeholder="Enter instructions, notes, or required actions for the department..."
               value={routeData.instructions}
               onChange={(e) => setRouteData({ ...routeData, instructions: e.target.value })}
-              className="w-full rounded-lg bg-zinc-50 border border-zinc-200/80 p-2.5 text-xs text-zinc-900 focus:bg-white focus:outline-none resize-none"
+              className="w-full rounded-lg bg-slate-50 border border-slate-200 p-2.5 text-xs text-slate-900 focus:bg-white focus:outline-none resize-none"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100">
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
             <Button variant="ghost" type="button" onClick={() => setShowRouteModal(false)}>
-              ተመለስ (Cancel)
+              Cancel
             </Button>
             <Button variant="primary" type="submit" disabled={isActionLoading}>
-              አስተላልፍ (Confirm Transfer)
+              Route Letter
             </Button>
           </div>
         </form>
@@ -1562,31 +1554,31 @@ export const LettersPage: React.FC = () => {
       <Modal
         isOpen={showCompleteModal}
         onClose={() => setShowCompleteModal(false)}
-        title="የተግባር ማጠናቀቂያ ማብራሪያ (Complete Routing Task)"
+        title="Complete Routing Task"
         maxWidth="md"
       >
         <form onSubmit={handleCompleteRoutingSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-zinc-600 mb-1.5">
-              የተከናወነ ተግባር ዝርዝር (Resolution Notes)
+            <label className="block text-xs font-medium text-slate-600 mb-1.5">
+              Resolution Notes
             </label>
             <textarea
               rows={3}
-              placeholder="የተከናወነውን ስራ ወይም የተሰጠውን ምላሽ እዚህ ያብራሩ..."
+              placeholder="Describe the action taken or resolution summary..."
               value={completeResponseNotes}
               onChange={(e) => setCompleteResponseNotes(e.target.value)}
               required
               autoFocus
-              className="w-full rounded-lg bg-zinc-50 border border-zinc-200/80 p-2.5 text-xs text-zinc-900 focus:bg-white focus:outline-none resize-none"
+              className="w-full rounded-lg bg-slate-50 border border-slate-200 p-2.5 text-xs text-slate-900 focus:bg-white focus:outline-none resize-none"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100">
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
             <Button variant="ghost" type="button" onClick={() => setShowCompleteModal(false)}>
-              ተመለስ (Cancel)
+              Cancel
             </Button>
             <Button variant="primary" type="submit" disabled={isActionLoading}>
-              አጠናቅቅ (Confirm Resolution)
+              Complete Task
             </Button>
           </div>
         </form>
